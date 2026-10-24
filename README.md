@@ -21,6 +21,7 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+The dashboard requests overview metrics, campaigns, and content from the FastAPI service. By default it uses `http://localhost:8000`. To change the API address, copy `.env.example` to `.env.local` in `web/`, set `NEXT_PUBLIC_API_BASE_URL` to the API origin, and restart the dashboard.
 
 ## Run the API
 
@@ -44,7 +45,7 @@ The API endpoints return in-memory mock data:
 - `GET /api/campaigns`
 - `GET /api/content`
 
-The Next.js dashboard currently uses its own local mock fixture so it can run independently of the API. Both sets are demonstration data.
+The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, scheduled posts, and drafts remain demonstration data returned by the API; no AI or social integration is connected.
 
 ## Development checks
 

@@ -33,6 +33,20 @@ class DemoApiTests(unittest.TestCase):
     def test_unknown_route_returns_not_found(self) -> None:
         self.assertEqual(self.client.get("/api/missing").status_code, 404)
 
+    def test_cors_allows_local_dashboard_origin(self) -> None:
+        response = self.client.get(
+            "/api/dashboard/overview",
+            headers={"Origin": "http://localhost:3000"},
+        )
+        self.assertEqual(response.headers.get("access-control-allow-origin"), "http://localhost:3000")
+
+    def test_cors_does_not_allow_unconfigured_origin(self) -> None:
+        response = self.client.get(
+            "/api/dashboard/overview",
+            headers={"Origin": "http://example.com"},
+        )
+        self.assertNotIn("access-control-allow-origin", response.headers)
+
 
 if __name__ == "__main__":
     unittest.main()
