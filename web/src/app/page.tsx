@@ -15,6 +15,7 @@ import {
   type Metric,
   type OverviewResponse,
 } from "@/lib/api";
+import ContentWorkflow from "@/components/content-workflow";
 
 function Mark({ small = false }: { small?: boolean }) {
   return <span className={`brand-mark${small ? " brand-mark-small" : ""}`} aria-hidden="true"><span>f</span></span>;
@@ -132,7 +133,7 @@ function ContentDraft({ item }: { item: ContentItem }) {
     <article className="draft-card">
       <div className="draft-head"><span className={`draft-icon ${color}`}>{color === "pink" ? "◎" : color === "blue" ? "in" : "✉"}</span><span className="draft-type">{item.is_ai_generated_example ? "SAMPLE AI DRAFT" : "DRAFT"} · {item.channel.toUpperCase()}</span><span className="draft-menu">···</span></div>
       <h3>{item.title}</h3><p>{item.body}</p>
-      <div className="draft-footer"><span className="tone-tag"><i />{item.is_ai_generated_example ? "AI example" : "Demo content"}</span><button type="button" disabled title="Editing is coming soon">Open draft <span>↗</span></button></div>
+      <div className="draft-footer"><span className="tone-tag"><i />{item.is_ai_generated_example ? "AI example" : "Demo content"}</span><span className="draft-type">SAMPLE ONLY</span></div>
     </article>
   );
 }
@@ -211,12 +212,20 @@ export default function Home() {
             </div><div className="panel-footnote"><span>◷</span> Schedule examples from the demo API.</div></section>
           </div>
 
-          <section className="studio-section" id="studio"><div className="studio-intro"><div><div className="eyebrow"><span className="eyebrow-star">✦</span> YOUR CREATIVE CORNER</div><h2>Content studio</h2><p>Sample drafts from your connected demo API.</p></div><button className="outline-button" type="button" disabled title="AI generation is not connected">✦ &nbsp; Generate ideas <span className="soon-label">SOON</span></button></div><div className="draft-grid">
-            {content.status === "loading" && <div className="resource-state">Loading content drafts…</div>}
-            {content.status === "error" && <RetryMessage message={content.message} onRetry={retry} />}
-            {content.status === "success" && draftContent.length === 0 && <div className="resource-state">No drafts are available yet.</div>}
-            {content.status === "success" && draftContent.map((item) => <ContentDraft item={item} key={item.id} />)}
-          </div><div className="studio-disclaimer"><span>✦</span> Sample drafts for inspiration. No AI service is connected.</div></section>
+          <section className="studio-section" id="studio">
+            <div className="studio-intro"><div><div className="eyebrow"><span className="eyebrow-star">✦</span> YOUR CREATIVE CORNER</div><h2>Content studio</h2><p>Create a demo draft, refine it, and keep it in your workspace.</p></div></div>
+            <ContentWorkflow />
+            <section className="sample-api-drafts" aria-labelledby="sample-drafts-title">
+              <div className="saved-drafts-heading"><div><div className="eyebrow">CONTENT FEED</div><h3 id="sample-drafts-title">Sample content examples</h3></div></div>
+              <div className="draft-grid">
+                {content.status === "loading" && <div className="resource-state">Loading content examples…</div>}
+                {content.status === "error" && <RetryMessage message={content.message} onRetry={retry} />}
+                {content.status === "success" && draftContent.length === 0 && <div className="resource-state">No sample drafts are available from the content feed.</div>}
+                {content.status === "success" && draftContent.map((item) => <ContentDraft item={item} key={item.id} />)}
+              </div>
+              <div className="studio-disclaimer"><span>✦</span> Content feed examples are separate from saved drafts.</div>
+            </section>
+          </section>
           <footer className="page-footer"><span><Mark small /> Made for meaningful momentum.</span><span>Fundly AI Marketing Agent <i>·</i> Local demo</span></footer>
         </div>
       </main>

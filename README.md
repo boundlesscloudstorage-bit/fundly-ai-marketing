@@ -44,8 +44,31 @@ The API endpoints return in-memory mock data:
 - `GET /api/dashboard/overview`
 - `GET /api/campaigns`
 - `GET /api/content`
+- `POST /api/content/generate` — creates a deterministic template-based example; no AI model or external service is called.
+- `GET /api/drafts` — lists saved drafts held in memory.
+- `POST /api/drafts` — saves an edited example as a draft.
+- `PATCH /api/drafts/{draft_id}` — edits caption/hashtags or marks a draft approved.
 
 The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, scheduled posts, and drafts remain demonstration data returned by the API; no AI or social integration is connected.
+
+The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. Generated text is a deterministic template example, not output from a real AI model. You can edit the caption and hashtags, save drafts, edit them later, or mark them approved. Approval does not publish anything. Saved drafts use in-memory storage and are cleared whenever the FastAPI process restarts. Generation rejects prompts containing common guaranteed-return and unsupported investment claims.
+
+### Try content generation
+
+With the API running, use PowerShell to request an offline demo draft:
+
+```powershell
+$body = @{
+  topic = "building a monthly budget"
+  platform = "linkedin"
+  objective = "education"
+  tone = "friendly"
+  keywords = "planning, everyday money"
+} | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/content/generate -ContentType "application/json" -Body $body
+```
+
+Open the dashboard and use the Content Studio to generate, edit, and save drafts. The Saved Drafts section supports further edits and approval status changes.
 
 ## Development checks
 
