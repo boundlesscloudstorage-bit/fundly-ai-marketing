@@ -1,21 +1,67 @@
 import unittest
 from datetime import datetime
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event, inspect, select, text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import StaticPool
 
-from app.main import app
-from app.services.draft_store import draft_store
+from app.database import create_session_factory
+from app.db_models import DraftRecord
+from app.main import create_app
+from app.services.draft_repository import DraftRepository, DraftVersionConflict
 
 
 class DemoApiTests(unittest.TestCase):
     def setUp(self) -> None:
-        draft_store.clear()
-        self.client = TestClient(app)
+        self.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+        config.attributes["database_url"] = "sqlite://"
+        migration_connection = self.engine.connect()
+        config.attributes["connection"] = migration_connection
+        command.upgrade(config, "head")
+        migration_connection.close()
+
+        self.session_factory = create_session_factory(self.engine)
+        self.client = TestClient(create_app(self.session_factory))
+
+    def tearDown(self) -> None:
+        self.client.close()
+        self.engine.dispose()
 
     def test_health_is_demo_mode(self) -> None:
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok", "mode": "demo"})
+
+    def test_migration_schema_matches_sqlalchemy_model(self) -> None:
+        config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+        config.attributes["database_url"] = "sqlite://"
+        with self.engine.connect() as connection:
+            config.attributes["connection"] = connection
+            command.check(config)
+
+    def test_migration_downgrade_is_limited_to_new_drafts_table(self) -> None:
+        config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+        config.attributes["database_url"] = "sqlite://"
+        with self.engine.begin() as connection:
+            connection.execute(text("CREATE TABLE existing_sentinel (id INTEGER PRIMARY KEY)"))
+        with self.engine.connect() as connection:
+            config.attributes["connection"] = connection
+            command.downgrade(config, "base")
+            tables = inspect(connection).get_table_names()
+            self.assertIn("existing_sentinel", tables)
+            self.assertNotIn("drafts", tables)
+            connection.commit()
+            command.upgrade(config, "head")
+            self.assertIn("drafts", inspect(connection).get_table_names())
 
     def test_overview_is_validated_and_marked_demo(self) -> None:
         response = self.client.get("/api/dashboard/overview")
@@ -158,6 +204,25 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(listed.json()["total"], 1)
         self.assertEqual(listed.json()["items"][0]["id"], saved["id"])
 
+    def test_saved_drafts_survive_app_recreation(self) -> None:
+        saved = self.client.post(
+            "/api/drafts",
+            json={
+                "topic": "saving for later",
+                "caption": "A persistent example draft.",
+                "hashtags": ["#Planning"],
+                "platform": "facebook",
+                "objective": "education",
+                "tone": "professional",
+            },
+        ).json()
+
+        with TestClient(create_app(self.session_factory)) as restarted_app:
+            persisted = restarted_app.get("/api/drafts")
+
+        self.assertEqual(persisted.status_code, 200)
+        self.assertEqual(persisted.json()["items"][0]["id"], saved["id"])
+
     def test_edit_draft_updates_caption_hashtags_and_character_count(self) -> None:
         saved = self.client.post(
             "/api/drafts",
@@ -171,6 +236,8 @@ class DemoApiTests(unittest.TestCase):
             },
         ).json()
 
+        original_updated_at = datetime.fromisoformat(saved["updated_at"])
+
         response = self.client.patch(
             f"/api/drafts/{saved['id']}",
             json={"caption": "Updated caption with a few more words.", "hashtags": ["#MoneyGoals"]},
@@ -179,6 +246,7 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(response.json()["caption"], "Updated caption with a few more words.")
         self.assertEqual(response.json()["hashtags"], ["#MoneyGoals"])
         self.assertEqual(response.json()["character_count"], len(response.json()["caption"]))
+        self.assertGreaterEqual(datetime.fromisoformat(response.json()["updated_at"]), original_updated_at)
 
     def test_approve_draft_without_publishing(self) -> None:
         saved = self.client.post(
@@ -262,6 +330,86 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "draft")
         self.assertEqual(response.json()["hashtags"], ["#Planning", "#Fundly"])
+
+    def test_version_conflict_rolls_back_update(self) -> None:
+        saved = self.client.post(
+            "/api/drafts",
+            json={
+                "topic": "thoughtful planning",
+                "caption": "Original content.",
+                "hashtags": ["#Planning"],
+                "platform": "linkedin",
+                "objective": "education",
+                "tone": "friendly",
+            },
+        ).json()
+
+        repository = DraftRepository()
+        with self.session_factory() as session:
+            record = session.get(DraftRecord, saved["id"])
+            self.assertIsNotNone(record)
+            current_version = record.version
+
+        with self.session_factory() as session:
+            repository.update(session, saved["id"], {"caption": "Committed update."})
+
+        with self.session_factory() as session:
+            with self.assertRaises(DraftVersionConflict):
+                repository.update(
+                    session,
+                    saved["id"],
+                    {"caption": "Stale update must roll back."},
+                    expected_version=current_version,
+                )
+
+        with self.session_factory() as session:
+            stored = session.scalar(select(DraftRecord).where(DraftRecord.id == saved["id"]))
+            self.assertEqual(stored.caption, "Committed update.")
+            self.assertEqual(stored.version, current_version + 1)
+
+    def test_concurrent_version_conflict_returns_409(self) -> None:
+        saved = self.client.post(
+            "/api/drafts",
+            json={
+                "topic": "thoughtful planning",
+                "caption": "Original content.",
+                "hashtags": ["#Planning"],
+                "platform": "linkedin",
+                "objective": "education",
+                "tone": "friendly",
+            },
+        ).json()
+        # Exercise the same atomic compare-and-swap failure as a concurrently stale request.
+        class ConflictingRepository(DraftRepository):
+            def update(self, session, draft_id, changes, *, expected_version=None):
+                return super().update(session, draft_id, changes, expected_version=0)
+
+        self.client.app.state.draft_repository = ConflictingRepository()
+        response = self.client.patch(
+            f"/api/drafts/{saved['id']}",
+            json={"caption": "Stale update."},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        current = self.client.get("/api/drafts").json()["items"][0]
+        self.assertEqual(current["caption"], "Original content.")
+
+    def test_database_unavailable_returns_generic_503(self) -> None:
+        broken_engine = create_engine("sqlite://", poolclass=StaticPool)
+
+        @event.listens_for(broken_engine, "do_connect")
+        def simulate_connection_loss(*_args, **_kwargs):
+            raise OperationalError("connect", {}, RuntimeError("database offline"))
+
+        broken_client = TestClient(create_app(create_session_factory(broken_engine)))
+        try:
+            response = broken_client.get("/api/drafts")
+        finally:
+            broken_client.close()
+            broken_engine.dispose()
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"detail": "Draft storage is temporarily unavailable"})
 
     def test_missing_draft_and_invalid_patch_return_errors(self) -> None:
         missing = self.client.patch("/api/drafts/not-a-real-id", json={"status": "approved"})

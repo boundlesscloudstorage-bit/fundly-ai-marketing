@@ -1,8 +1,15 @@
 """Local demo API for the Fundly AI Marketing Agent dashboard."""
 
-from fastapi import FastAPI, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
+from __future__ import annotations
 
+import logging
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, SQLAlchemyError
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.database import SessionFactory, get_session
 from app.mock_data import CAMPAIGNS, CONTENT, OVERVIEW
 from app.models import (
     CampaignListResponse,
@@ -17,33 +24,23 @@ from app.models import (
     SaveDraftRequest,
 )
 from app.services.content_generator import generate_content
-from app.services.draft_store import draft_store
+from app.services.draft_repository import DraftRepository, DraftVersionConflict
 
-app = FastAPI(
-    title="Fundly AI Marketing Agent API",
-    description=(
-        "Local demonstration API. All responses are mock data; no AI or social "
-        "provider is connected and no content can be published."
-    ),
-    version="0.1.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH"],
-    allow_headers=["*"],
-)
+logger = logging.getLogger(__name__)
+router = APIRouter()
 
 
-@app.get("/health", response_model=HealthResponse, tags=["system"])
+def _get_draft_repository(request: Request) -> DraftRepository:
+    return request.app.state.draft_repository
+
+
+@router.get("/health", response_model=HealthResponse, tags=["system"])
 async def health() -> HealthResponse:
     """Report that the local API process is ready."""
     return HealthResponse(status="ok", mode="demo")
 
 
-@app.get(
+@router.get(
     "/api/dashboard/overview",
     response_model=OverviewResponse,
     tags=["dashboard"],
@@ -54,29 +51,19 @@ async def get_overview() -> OverviewResponse:
     return OverviewResponse.model_validate(OVERVIEW)
 
 
-@app.get(
-    "/api/campaigns",
-    response_model=CampaignListResponse,
-    tags=["campaigns"],
-    summary="List demo campaigns",
-)
+@router.get("/api/campaigns", response_model=CampaignListResponse, tags=["campaigns"])
 async def get_campaigns() -> CampaignListResponse:
     """Return the in-memory sample campaign list."""
     return CampaignListResponse(items=CAMPAIGNS, total=len(CAMPAIGNS))
 
 
-@app.get(
-    "/api/content",
-    response_model=ContentListResponse,
-    tags=["content"],
-    summary="List demo scheduled content and drafts",
-)
+@router.get("/api/content", response_model=ContentListResponse, tags=["content"])
 async def get_content() -> ContentListResponse:
     """Return the in-memory sample content list."""
     return ContentListResponse(items=CONTENT, total=len(CONTENT))
 
 
-@app.post(
+@router.post(
     "/api/content/generate",
     response_model=GeneratedContent,
     tags=["content"],
@@ -87,37 +74,38 @@ async def generate_demo_content(request: ContentGenerationRequest) -> GeneratedC
     return generate_content(request)
 
 
-@app.get(
-    "/api/drafts",
-    response_model=DraftListResponse,
-    tags=["drafts"],
-    summary="List process-local saved drafts",
-)
-async def list_drafts() -> DraftListResponse:
-    """List drafts held in memory until the API process restarts."""
-    items = draft_store.list()
+@router.get("/api/drafts", response_model=DraftListResponse, tags=["drafts"])
+def list_drafts(
+    session: Session = Depends(get_session),
+    repository: DraftRepository = Depends(_get_draft_repository),
+) -> DraftListResponse:
+    """List saved drafts from persistent storage."""
+    items = repository.list(session)
     return DraftListResponse(items=items, total=len(items))
 
 
-@app.post(
+@router.post(
     "/api/drafts",
     response_model=DraftResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["drafts"],
-    summary="Save a generated example as a draft",
 )
-async def create_draft(request: SaveDraftRequest) -> DraftResponse:
-    """Save an editable draft in process-local memory."""
-    return draft_store.create(request)
+def create_draft(
+    request: SaveDraftRequest,
+    session: Session = Depends(get_session),
+    repository: DraftRepository = Depends(_get_draft_repository),
+) -> DraftResponse:
+    """Save an editable draft in the database."""
+    return repository.create(session, request)
 
 
-@app.patch(
-    "/api/drafts/{draft_id}",
-    response_model=DraftResponse,
-    tags=["drafts"],
-    summary="Edit a saved draft or mark it approved",
-)
-async def update_draft(draft_id: str, request: DraftUpdateRequest) -> DraftResponse:
+@router.patch("/api/drafts/{draft_id}", response_model=DraftResponse, tags=["drafts"])
+def update_draft(
+    draft_id: str,
+    request: DraftUpdateRequest,
+    session: Session = Depends(get_session),
+    repository: DraftRepository = Depends(_get_draft_repository),
+) -> DraftResponse:
     """Update text or status; approval never triggers publishing."""
     changes = request.model_dump(exclude_unset=True)
     if not changes:
@@ -125,7 +113,73 @@ async def update_draft(draft_id: str, request: DraftUpdateRequest) -> DraftRespo
     if any(value is None for value in changes.values()):
         raise HTTPException(status_code=422, detail="Draft fields cannot be set to null")
 
-    updated = draft_store.update(draft_id, changes)
+    try:
+        updated = repository.update(session, draft_id, changes)
+    except DraftVersionConflict as exc:
+        raise HTTPException(status_code=409, detail="Draft changed concurrently; reload and retry") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Draft '{draft_id}' was not found")
     return updated
+
+
+def _log_database_failure(context: str, error: Exception) -> None:
+    original = getattr(error, "orig", error)
+    driver_code = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    logger.error(
+        "Database %s failed (exception=%s, sqlstate=%s)",
+        context,
+        type(error).__name__,
+        driver_code or "unavailable",
+    )
+
+
+def create_app(
+    session_factory: sessionmaker[Session] | None = None,
+    repository: DraftRepository | None = None,
+) -> FastAPI:
+    """Create an app with an injectable session factory for isolated tests."""
+    application = FastAPI(
+        title="Fundly AI Marketing Agent API",
+        description=(
+            "Local demonstration API. Dashboard and generated content are mock data; "
+            "no AI or social provider is connected and no content can be published."
+        ),
+        version="0.2.0",
+    )
+    application.state.session_factory = session_factory or SessionFactory
+    application.state.draft_repository = repository or DraftRepository()
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH"],
+        allow_headers=["*"],
+    )
+    application.include_router(router)
+
+    @application.exception_handler(OperationalError)
+    async def database_unavailable(_request: Request, error: OperationalError) -> JSONResponse:
+        _log_database_failure("connection", error)
+        return JSONResponse(status_code=503, content={"detail": "Draft storage is temporarily unavailable"})
+
+    @application.exception_handler(IntegrityError)
+    async def database_integrity_conflict(_request: Request, error: IntegrityError) -> JSONResponse:
+        _log_database_failure("constraint", error)
+        return JSONResponse(status_code=409, content={"detail": "Draft could not be saved because of a data conflict"})
+
+    @application.exception_handler(DBAPIError)
+    async def database_driver_error(_request: Request, error: DBAPIError) -> JSONResponse:
+        _log_database_failure("operation", error)
+        if error.connection_invalidated:
+            return JSONResponse(status_code=503, content={"detail": "Draft storage is temporarily unavailable"})
+        return JSONResponse(status_code=500, content={"detail": "Draft storage operation failed"})
+
+    @application.exception_handler(SQLAlchemyError)
+    async def database_internal_error(_request: Request, error: SQLAlchemyError) -> JSONResponse:
+        _log_database_failure("operation", error)
+        return JSONResponse(status_code=500, content={"detail": "Draft storage operation failed"})
+
+    return application
+
+
+app = create_app()
