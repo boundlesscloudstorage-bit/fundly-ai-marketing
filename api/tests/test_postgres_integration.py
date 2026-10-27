@@ -27,8 +27,21 @@ class PostgreSQLDraftRepositoryTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         parsed_url = make_url(TEST_DATABASE_URL or "")
         database_name = (parsed_url.database or "").lower()
-        if not database_name.endswith("_test") and not database_name.startswith("test_"):
-            raise RuntimeError("TEST_DATABASE_URL database name must begin with test_ or end with _test")
+        is_named_test_database = (
+            database_name.startswith("test_")
+            or database_name.endswith("_test")
+        )
+
+        is_dedicated_neon_test_database = (
+            database_name == "neondb"
+            and (parsed_url.host or "").endswith(".neon.tech")
+        )
+
+        if not (is_named_test_database or is_dedicated_neon_test_database):
+            raise RuntimeError(
+                "TEST_DATABASE_URL must use a test-named database "
+                "or the dedicated Neon test database."
+            )
         if parsed_url.get_backend_name() != "postgresql":
             raise RuntimeError("TEST_DATABASE_URL must point to PostgreSQL")
 
@@ -49,7 +62,7 @@ class PostgreSQLDraftRepositoryTests(unittest.TestCase):
                 connection.execute(text(f'DROP SCHEMA IF EXISTS "{cls.schema}" CASCADE'))
             cls.engine.dispose()
 
-    def test_postgres_persistence_and_version_checked_rollback(self) -> None:
+    def test_postgres_create_list_update(self) -> None:
         request = SaveDraftRequest(
             topic="saving with a goal",
             caption="A measured example caption.",
@@ -62,8 +75,36 @@ class PostgreSQLDraftRepositoryTests(unittest.TestCase):
             created = self.repository.create(session, request)
 
         with self.session_factory() as session:
-            self.assertEqual(self.repository.list(session)[0].id, created.id)
-            updated = self.repository.update(session, created.id, {"caption": "Updated example caption."})
+            listed = self.repository.list(session)
+            persisted = next(draft for draft in listed if draft.id == created.id)
+            self.assertEqual(persisted.id, created.id)
+
+        with self.session_factory() as session:
+            updated = self.repository.update(
+                session,
+                created.id,
+                {"caption": "Updated example caption."},
+            )
+            self.assertEqual(updated.caption, "Updated example caption.")
+
+    def test_postgres_version_conflict_rolls_back_update(self) -> None:
+        request = SaveDraftRequest(
+            topic="saving with a goal",
+            caption="A measured example caption.",
+            hashtags=["#Planning"],
+            platform="linkedin",
+            objective="education",
+            tone="friendly",
+        )
+        with self.session_factory() as session:
+            created = self.repository.create(session, request)
+
+        with self.session_factory() as session:
+            updated = self.repository.update(
+                session,
+                created.id,
+                {"caption": "Updated example caption."},
+            )
             self.assertEqual(updated.caption, "Updated example caption.")
 
         with self.session_factory() as session:
@@ -76,7 +117,9 @@ class PostgreSQLDraftRepositoryTests(unittest.TestCase):
                 )
 
         with self.session_factory() as session:
-            persisted = self.repository.list(session)[0]
+            persisted = next(
+                draft for draft in self.repository.list(session) if draft.id == created.id
+            )
             self.assertEqual(persisted.caption, "Updated example caption.")
 
 

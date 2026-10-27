@@ -54,24 +54,35 @@ The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. 
 
 ### Persistent draft database
 
-The API uses SQLAlchemy with PostgreSQL through psycopg. For a simple local setup, it defaults to a SQLite database at `api/fundly.db`; set `DATABASE_URL` to use PostgreSQL instead. Database configuration is read from the process environment and `api/.env` (copy the safe example if you want a local configuration file):
+The API uses SQLAlchemy with PostgreSQL through psycopg. For a simple local setup, it defaults to a SQLite database at `api/fundly.db`; set `DATABASE_URL` to use PostgreSQL instead. Database configuration is read from the process environment and `api/.env`; a process environment variable takes precedence. Copy the safe example if you want a local configuration file:
 
 ```powershell
 cd C:\Users\PC\fundly-ai-marketing\api
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-The example uses local SQLite. To connect to PostgreSQL, set `DATABASE_URL` in the ignored `api/.env` file to a PostgreSQL URL using the psycopg driver, for example `postgresql+psycopg://USER:PASSWORD@HOST:5432/postgres?sslmode=require`. Never commit `.env` or put database credentials in source code. Supabase may be used as a PostgreSQL host later; this project does not configure a Supabase project or require one for tests.
+The example uses local SQLite. To connect to hosted PostgreSQL such as Supabase, set `DATABASE_URL` in the ignored `api/.env` file to the provider's PostgreSQL URL using the psycopg driver, for example `postgresql+psycopg://USER:PASSWORD@HOST:5432/postgres?sslmode=require`. Treat this as a format example; use the URL from your own provider dashboard. Never commit `.env`, paste credentials into source code, or share the URL in logs or support messages. Supabase is optional and no Supabase project is configured or required for tests. Run the connection check and any later Alembic command from the same PowerShell window; confirm that no unintended process-level `DATABASE_URL` is overriding the value in `.env`.
 
-Apply the versioned schema migration explicitly before starting the API:
+From `api/`, check connectivity before considering a migration:
 
 ```powershell
 cd C:\Users\PC\fundly-ai-marketing\api
-alembic upgrade head
-uvicorn app.main:app --reload
+python -m app.check_database
 ```
 
-The migration creates only the new `drafts` table and its indexes; it does not replace or modify other tables. To inspect migration history, run `alembic history`. The corresponding downgrade is `alembic downgrade base`; it removes the table created by this migration and therefore deletes its drafts. Back up any drafts before intentionally downgrading. Migrations never run automatically when the API imports or starts.
+The check runs only `SELECT 1`. It reports success or a sanitized error and never prints the database URL, host, username, or password. Before any migration, independently verify that the configured project, host, and database are the intended target in your provider dashboard. Then inspect the current migration revision:
+
+```powershell
+alembic current
+```
+
+Only after confirming the target and its current schema state, apply the versioned migration:
+
+```powershell
+alembic upgrade head
+```
+
+The migration creates only the new `drafts` table and its indexes; it does not replace or modify other tables. If the target already has an unversioned `drafts` table or its state is unclear, stop and review it before upgrading. To inspect migration history, run `alembic history`. The corresponding downgrade is `alembic downgrade base`; it removes the table created by this migration and therefore deletes its drafts. Back up any drafts before intentionally downgrading. Migrations never run automatically when the API imports or starts. After a successful migration, start the API with `uvicorn app.main:app --reload`.
 
 ### Try content generation
 
@@ -92,7 +103,7 @@ Open the dashboard and use the Content Studio to generate, edit, and save drafts
 
 ## Development checks
 
-From `web/`, run `npm run lint` and `npm run build`. From `api/`, install `requirements.txt` in the existing virtual environment, apply `alembic upgrade head`, then run `python -m compileall app` and `python -m unittest discover -s tests`. Routine tests use a fresh isolated in-memory SQLite database and do not need PostgreSQL or Supabase credentials. PostgreSQL integration tests are skipped unless both `RUN_POSTGRES_INTEGRATION=1` and `TEST_DATABASE_URL` are explicitly set. The configured database name must start with `test_` or end in `_test`; tests create and remove only a uniquely named schema. Use a dedicated disposable test database, never production data.
+From `web/`, run `npm run lint` and `npm run build`. From `api/`, install `requirements.txt` in the existing virtual environment, then run `python -m compileall app` and `python -m unittest discover -s tests`. Routine tests use a fresh isolated in-memory SQLite database and do not need PostgreSQL or Supabase credentials. PostgreSQL integration tests are skipped unless both `RUN_POSTGRES_INTEGRATION=1` and `TEST_DATABASE_URL` are explicitly set. The database name must start with `test_` or end in `_test`, except the dedicated Neon database named `neondb` is allowed when the host ends in `.neon.tech`. Tests create and remove only a uniquely named schema. Use a dedicated disposable test database, never production data. Do not run a migration as part of routine tests.
 
 ## Project layout
 
