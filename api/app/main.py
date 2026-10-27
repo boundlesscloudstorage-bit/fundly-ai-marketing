@@ -23,7 +23,13 @@ from app.models import (
     OverviewResponse,
     SaveDraftRequest,
 )
-from app.services.content_generator import generate_content
+from app.services.content_generator import (
+    AIConfigurationError,
+    AIInvalidResponseError,
+    AIProviderError,
+    AIProviderTimeoutError,
+    ContentGenerator,
+)
 from app.services.draft_repository import DraftRepository, DraftVersionConflict
 
 logger = logging.getLogger(__name__)
@@ -67,11 +73,33 @@ async def get_content() -> ContentListResponse:
     "/api/content/generate",
     response_model=GeneratedContent,
     tags=["content"],
-    summary="Generate a deterministic demo marketing draft",
+    summary="Generate an AI marketing draft for the Fundly brand",
 )
-async def generate_demo_content(request: ContentGenerationRequest) -> GeneratedContent:
-    """Return a template-generated example; no AI provider is called."""
-    return generate_content(request)
+async def generate_ai_content(request: ContentGenerationRequest, http_request: Request) -> GeneratedContent:
+    """Generate validated content through the configured server-side AI provider."""
+    generator: ContentGenerator = http_request.app.state.content_generator
+    try:
+        return await generator.generate(request)
+    except AIConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="AI content generation is not configured. Check GEMINI_API_KEY and GEMINI_MODEL in api/.env.",
+        ) from exc
+    except AIProviderTimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="The AI provider timed out. Please try again.",
+        ) from exc
+    except AIInvalidResponseError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="The AI provider returned content that could not be validated. Please retry.",
+        ) from exc
+    except AIProviderError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="The AI provider request failed. Please try again later.",
+        ) from exc
 
 
 @router.get("/api/drafts", response_model=DraftListResponse, tags=["drafts"])
@@ -136,18 +164,20 @@ def _log_database_failure(context: str, error: Exception) -> None:
 def create_app(
     session_factory: sessionmaker[Session] | None = None,
     repository: DraftRepository | None = None,
+    content_generator: ContentGenerator | None = None,
 ) -> FastAPI:
     """Create an app with an injectable session factory for isolated tests."""
     application = FastAPI(
         title="Fundly AI Marketing Agent API",
         description=(
-            "Local demonstration API. Dashboard and generated content are mock data; "
-            "no AI or social provider is connected and no content can be published."
+            "Dashboard metrics and scheduled content are sample data. Content generation uses "
+            "a configured server-side AI provider; approval does not publish or post content."
         ),
         version="0.2.0",
     )
     application.state.session_factory = session_factory or SessionFactory
     application.state.draft_repository = repository or DraftRepository()
+    application.state.content_generator = content_generator or ContentGenerator()
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],

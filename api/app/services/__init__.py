@@ -1,1 +1,1 @@
-"""Service layer for demo content generation and draft storage."""
+"""AI content generation and persistent draft storage services."""

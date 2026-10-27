@@ -63,7 +63,7 @@ class DraftRepository:
             status="draft",
             created_at=now,
             updated_at=now,
-            is_demo_generated=True,
+            is_demo_generated=request.is_demo_generated,
             version=1,
         )
         with session.begin():

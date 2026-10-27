@@ -5,6 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import StaticPool
@@ -12,7 +13,29 @@ from sqlalchemy.pool import StaticPool
 from app.database import create_session_factory
 from app.db_models import DraftRecord
 from app.main import create_app
+from app.models import GeneratedContent
+from app.services.content_generator import (
+    AIInvalidResponseError,
+    AIProviderError,
+    AIProviderTimeoutError,
+    ContentGenerator,
+)
 from app.services.draft_repository import DraftRepository, DraftVersionConflict
+
+
+class MockContentGenerator:
+    async def generate(self, request):
+        caption = f"A thoughtful Fundly draft about {request.topic}."
+        return GeneratedContent(
+            topic=request.topic,
+            caption=caption,
+            hashtags=["#Fundly", "#Planning"],
+            platform=request.platform,
+            objective=request.objective,
+            tone=request.tone,
+            character_count=len(caption),
+            is_demo_generated=False,
+        )
 
 
 class DemoApiTests(unittest.TestCase):
@@ -30,7 +53,7 @@ class DemoApiTests(unittest.TestCase):
         migration_connection.close()
 
         self.session_factory = create_session_factory(self.engine)
-        self.client = TestClient(create_app(self.session_factory))
+        self.client = TestClient(create_app(self.session_factory, content_generator=MockContentGenerator()))
 
     def tearDown(self) -> None:
         self.client.close()
@@ -96,7 +119,7 @@ class DemoApiTests(unittest.TestCase):
         )
         self.assertNotIn("access-control-allow-origin", response.headers)
 
-    def test_generation_returns_valid_deterministic_demo_content(self) -> None:
+    def test_generation_returns_valid_ai_content_shape(self) -> None:
         request = {
             "topic": "building a monthly budget",
             "platform": "linkedin",
@@ -105,16 +128,27 @@ class DemoApiTests(unittest.TestCase):
             "keywords": "planning, everyday money",
         }
         first = self.client.post("/api/content/generate", json=request)
-        second = self.client.post("/api/content/generate", json=request)
 
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(first.json(), second.json())
         payload = first.json()
         self.assertEqual(payload["platform"], "linkedin")
         self.assertEqual(payload["tone"], "friendly")
-        self.assertTrue(payload["is_demo_generated"])
+        self.assertFalse(payload["is_demo_generated"])
         self.assertEqual(payload["character_count"], len(payload["caption"]))
         self.assertTrue(all(tag.startswith("#") for tag in payload["hashtags"]))
+
+    def test_generated_content_rejects_inconsistent_character_count(self) -> None:
+        with self.assertRaises(ValidationError):
+            GeneratedContent(
+                topic="budgeting basics",
+                caption="A short caption.",
+                hashtags=["#Fundly"],
+                platform="linkedin",
+                objective="education",
+                tone="friendly",
+                character_count=1,
+                is_demo_generated=False,
+            )
 
     def test_generation_uses_all_supported_platforms(self) -> None:
         for platform in ("x", "linkedin", "instagram", "facebook"):
@@ -131,19 +165,6 @@ class DemoApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["platform"], platform)
                 self.assertLessEqual(response.json()["character_count"], 280 if platform == "x" else 2800)
-
-    def test_generation_changes_with_tone_and_platform(self) -> None:
-        common = {
-            "topic": "setting a savings goal",
-            "objective": "engagement",
-            "tone": "friendly",
-        }
-        friendly = self.client.post("/api/content/generate", json={**common, "platform": "instagram"}).json()
-        inspiring = self.client.post(
-            "/api/content/generate",
-            json={**common, "platform": "linkedin", "tone": "inspiring"},
-        ).json()
-        self.assertNotEqual(friendly["caption"], inspiring["caption"])
 
     def test_generation_rejects_missing_and_invalid_fields(self) -> None:
         missing_topic = self.client.post(
@@ -162,6 +183,70 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(missing_topic.status_code, 422)
         self.assertEqual(invalid_platform.status_code, 422)
         self.assertEqual(unsafe_claim.status_code, 422)
+
+    def test_generation_without_provider_key_returns_clear_configuration_error(self) -> None:
+        client = TestClient(create_app(self.session_factory, content_generator=ContentGenerator(api_key="")))
+        try:
+            response = client.post(
+                "/api/content/generate",
+                json={
+                    "topic": "monthly budgeting",
+                    "platform": "linkedin",
+                    "objective": "education",
+                    "tone": "friendly",
+                },
+            )
+        finally:
+            client.close()
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("GEMINI_API_KEY", response.json()["detail"])
+
+    def test_provider_failures_return_sanitized_http_errors(self) -> None:
+        cases = (
+            (AIProviderTimeoutError(), 504),
+            (AIInvalidResponseError(), 502),
+            (AIProviderError(), 502),
+        )
+        for error, expected_status in cases:
+            with self.subTest(expected_status=expected_status, error_type=type(error).__name__):
+                class FailingGenerator:
+                    async def generate(self, _request):
+                        raise error
+
+                client = TestClient(
+                    create_app(self.session_factory, content_generator=FailingGenerator())
+                )
+                try:
+                    response = client.post(
+                        "/api/content/generate",
+                        json={
+                            "topic": "monthly budgeting",
+                            "platform": "linkedin",
+                            "objective": "education",
+                            "tone": "friendly",
+                        },
+                    )
+                finally:
+                    client.close()
+                self.assertEqual(response.status_code, expected_status)
+                self.assertNotIn("GEMINI_API_KEY", response.text)
+
+    def test_generated_draft_provenance_is_persisted(self) -> None:
+        response = self.client.post(
+            "/api/drafts",
+            json={
+                "topic": "saving with a goal",
+                "caption": "A thoughtful Fundly draft about saving with a goal.",
+                "hashtags": ["#Fundly"],
+                "platform": "linkedin",
+                "objective": "education",
+                "tone": "friendly",
+                "is_demo_generated": False,
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.json()["is_demo_generated"])
 
     def test_generation_rejects_unsupported_claims_in_keywords(self) -> None:
         response = self.client.post(

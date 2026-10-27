@@ -2,7 +2,7 @@
 
 Fundly AI Marketing Agent is a local-first marketing dashboard prototype. Fundly is the first sample brand; the mock models include a brand identifier so the platform can grow to support more brands.
 
-> **Demo only:** Dashboard metrics, campaigns, scheduled posts, and AI draft examples are fictional sample data. No AI provider or social network is connected, and nothing can be published.
+> **Local prototype:** Dashboard metrics, campaigns, and scheduled posts are fictional sample data. Content generation calls the configured Gemini API from the backend. Draft approval is an internal status only; no social network is connected and nothing can be published.
 
 ## Requirements
 
@@ -37,20 +37,29 @@ uvicorn app.main:app --reload
 
 If PowerShell blocks virtual environment activation, allow it for the current terminal with `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then run the activation command again. The API is at [http://localhost:8000](http://localhost:8000); interactive API docs are at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-Dashboard metrics, campaigns, and scheduled content are in-memory mock data. Drafts use persistent database storage:
+Dashboard metrics, campaigns, and scheduled content are in-memory mock data. Content generation uses the configured Gemini API; no template fallback is used when configuration is missing. Drafts use persistent database storage:
 
 - `GET /health`
 - `GET /api/dashboard/overview`
 - `GET /api/campaigns`
 - `GET /api/content`
-- `POST /api/content/generate` — creates a deterministic template-based example; no AI model or external service is called.
+- `POST /api/content/generate` — requests and validates a structured marketing draft from Gemini. Returns a clear configuration error if `GEMINI_API_KEY` is missing.
 - `GET /api/drafts` — lists persistent saved drafts.
-- `POST /api/drafts` — saves an edited example as a draft (201 response).
+- `POST /api/drafts` — saves reviewed content as a draft (201 response).
 - `PATCH /api/drafts/{draft_id}` — edits caption/hashtags or marks a draft approved.
 
-The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, scheduled posts, and drafts remain demonstration data returned by the API; no AI or social integration is connected.
+The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, and scheduled posts remain demonstration data. AI generation is performed server-side, and the API key is never sent to the browser. No social integration is connected.
 
-The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. Generated text is a deterministic template example, not output from a real AI model. You can edit the caption and hashtags, save drafts, edit them later, or mark them approved. Approval does not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Drafts are stored in the configured database. The earlier Phase 3 in-memory drafts did not survive API restarts, so there is no historical dataset to migrate. Generation rejects prompts containing common guaranteed-return and unsupported investment claims.
+The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. It sends the topic, platform, objective, tone, and optional notes to Gemini and validates the structured response against the existing content schema and financial-claim checks. Those heuristic checks reject common guaranteed-return wording and numerical performance claims; they cannot verify that financial statements are factually true. Review and edit the generated copy before explicitly saving it; saved drafts use the configured database. You can edit drafts later or mark them approved. Approval does not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Provider credentials are server-side only. The optional Gemini free tier may use submitted content to improve Google's products; avoid including sensitive or personal information. Provider limits and any charges are controlled by your Google AI Studio project.
+
+To enable real AI generation, add the key to the ignored `api/.env` file (create it from `.env.example` if needed), then restart the API:
+
+```dotenv
+GEMINI_API_KEY=your_key_from_google_ai_studio
+GEMINI_MODEL=gemini-3.1-flash-lite
+```
+
+Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey). The example model is configurable with `GEMINI_MODEL`. Without `GEMINI_API_KEY`, generation returns a configuration error and does not produce template content. Automated tests mock provider responses and do not call Gemini or consume API credits.
 
 ### Persistent draft database
 
@@ -86,7 +95,7 @@ The migration creates only the new `drafts` table and its indexes; it does not r
 
 ### Try content generation
 
-With the API running, use PowerShell to request an offline demo draft:
+With `GEMINI_API_KEY` configured and the API running, use PowerShell to request a draft:
 
 ```powershell
 $body = @{
@@ -112,4 +121,4 @@ web/       Next.js App Router dashboard (TypeScript, Tailwind CSS)
 api/       FastAPI application, SQLAlchemy draft persistence, and Alembic migrations
 ```
 
-No secrets, paid services, external integrations, production database, or deployment configuration are included.
+No secrets, social publishing integration, production database, or deployment configuration are included. Gemini is optional and can incur charges if used with a paid Google AI Studio project.

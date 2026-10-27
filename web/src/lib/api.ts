@@ -78,6 +78,7 @@ export interface SaveDraftRequest {
   platform: Platform;
   objective: ContentObjective;
   tone: ContentTone;
+  is_demo_generated?: boolean;
 }
 
 export interface SavedDraft extends GeneratedContent {
