@@ -1,6 +1,6 @@
 """SQLAlchemy persistence models."""
 
-from sqlalchemy import CheckConstraint, DateTime, Integer, JSON, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, JSON, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -33,3 +33,30 @@ class DraftRecord(Base):
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     is_demo_generated: Mapped[bool] = mapped_column(nullable=False, default=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class CampaignRecord(Base):
+    __tablename__ = "campaigns"
+    __table_args__ = (
+        CheckConstraint(
+            "channel IN ('Instagram', 'LinkedIn', 'X', 'Facebook', 'Email')",
+            name="ck_campaigns_channel",
+        ),
+        CheckConstraint(
+            "status IN ('Planning', 'In progress')",
+            name="ck_campaigns_status",
+        ),
+        CheckConstraint("progress >= 0 AND progress <= 100", name="ck_campaigns_progress"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    brand_id: Mapped[str] = mapped_column(String(80), nullable=False, default="fundly", index=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    objective: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="Planning", index=True)
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    target_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False)

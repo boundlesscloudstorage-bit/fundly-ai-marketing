@@ -25,7 +25,7 @@ from app.models import (
     OverviewResponse,
     SaveDraftRequest,
 )
-from app.services.campaign_store import CampaignStore
+from app.services.campaign_repository import CampaignRepository
 from app.services.content_generator import (
     AIConfigurationError,
     AIAuthenticationError,
@@ -50,6 +50,10 @@ def _get_draft_repository(request: Request) -> DraftRepository:
     return request.app.state.draft_repository
 
 
+def _get_campaign_repository(request: Request) -> CampaignRepository:
+    return request.app.state.campaign_repository
+
+
 @router.get("/health", response_model=HealthResponse, tags=["system"])
 async def health() -> HealthResponse:
     """Report that the local API process is ready."""
@@ -68,9 +72,12 @@ async def get_overview() -> OverviewResponse:
 
 
 @router.get("/api/campaigns", response_model=CampaignListResponse, tags=["campaigns"])
-async def get_campaigns(request: Request) -> CampaignListResponse:
-    """Return sample and locally created demo campaigns."""
-    items = request.app.state.campaign_store.list()
+def get_campaigns(
+    session: Session = Depends(get_session),
+    repository: CampaignRepository = Depends(_get_campaign_repository),
+) -> CampaignListResponse:
+    """Return persisted demo campaigns."""
+    items = repository.list(session)
     return CampaignListResponse(items=items, total=len(items))
 
 
@@ -79,11 +86,15 @@ async def get_campaigns(request: Request) -> CampaignListResponse:
     response_model=Campaign,
     status_code=status.HTTP_201_CREATED,
     tags=["campaigns"],
-    summary="Create an in-memory campaign for the Fundly demo workspace",
+    summary="Create a persistent planning campaign for the Fundly demo workspace",
 )
-def create_campaign(request: CampaignCreateRequest, http_request: Request) -> Campaign:
+def create_campaign(
+    request: CampaignCreateRequest,
+    session: Session = Depends(get_session),
+    repository: CampaignRepository = Depends(_get_campaign_repository),
+) -> Campaign:
     """Create a planning entry; this does not schedule or publish content."""
-    return http_request.app.state.campaign_store.create(request)
+    return repository.create(session, request)
 
 
 @router.get("/api/content", response_model=ContentListResponse, tags=["content"])
@@ -223,7 +234,7 @@ def create_app(
     session_factory: sessionmaker[Session] | None = None,
     repository: DraftRepository | None = None,
     content_generator: ContentGenerator | None = None,
-    campaign_store: CampaignStore | None = None,
+    campaign_repository: CampaignRepository | None = None,
 ) -> FastAPI:
     """Create an app with an injectable session factory for isolated tests."""
     application = FastAPI(
@@ -237,7 +248,7 @@ def create_app(
     application.state.session_factory = session_factory or SessionFactory
     application.state.draft_repository = repository or DraftRepository()
     application.state.content_generator = content_generator or ContentGenerator()
-    application.state.campaign_store = campaign_store or CampaignStore()
+    application.state.campaign_repository = campaign_repository or CampaignRepository()
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],

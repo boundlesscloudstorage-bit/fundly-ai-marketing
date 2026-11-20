@@ -157,6 +157,25 @@ class DemoApiTests(unittest.TestCase):
         listing = self.client.get("/api/campaigns").json()
         self.assertEqual(listing["total"], 3)
 
+    def test_campaign_creation_persists_across_app_instances(self) -> None:
+        response = self.client.post(
+            "/api/campaigns",
+            json={
+                "name": "Persistent campaign",
+                "channel": "X",
+                "objective": "engagement",
+                "target_date": (date.today() + timedelta(days=14)).isoformat(),
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        created_id = response.json()["id"]
+
+        with TestClient(create_app(self.session_factory, content_generator=MockContentGenerator())) as restarted_client:
+            listing = restarted_client.get("/api/campaigns")
+
+        self.assertEqual(listing.status_code, 200)
+        self.assertIn(created_id, {item["id"] for item in listing.json()["items"]})
+
     def test_unknown_route_returns_not_found(self) -> None:
         self.assertEqual(self.client.get("/api/missing").status_code, 404)
 

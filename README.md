@@ -2,7 +2,7 @@
 
 Fundly AI Marketing Agent is a local-first marketing dashboard prototype. Fundly is the first sample brand; the mock models include a brand identifier so the platform can grow to support more brands.
 
-> **Local prototype:** Dashboard metrics, campaigns, and scheduled posts are fictional sample data. Content generation calls the configured Gemini API from the backend. Draft approval is an internal status only; no social network is connected and nothing can be published.
+> **Local prototype:** Dashboard metrics and scheduled posts are fictional sample data; campaigns and drafts use the configured local database. Content generation calls the configured Gemini API from the backend. Draft approval is an internal status only; no social network is connected and nothing can be published.
 
 ## Requirements
 
@@ -37,12 +37,12 @@ uvicorn app.main:app --reload
 
 If PowerShell blocks virtual environment activation, allow it for the current terminal with `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then run the activation command again. The API is at [http://localhost:8000](http://localhost:8000); interactive API docs are at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-Dashboard metrics, campaigns, and scheduled content are in-memory mock data. Content generation uses the configured Gemini API; no template fallback is used when configuration is missing. Drafts use persistent database storage:
+Dashboard metrics and scheduled content are in-memory mock data. Campaigns and drafts use persistent database storage. Content generation uses the configured Gemini API; no template fallback is used when configuration is missing:
 
 - `GET /health`
 - `GET /api/dashboard/overview`
 - `GET /api/campaigns`
-- `POST /api/campaigns` — creates a planning entry in the process-local demo campaign list (201 response).
+- `POST /api/campaigns` — creates a planning entry in the persistent demo campaign list (201 response).
 - `GET /api/content`
 - `POST /api/content/generate` — requests and validates a structured marketing draft from Gemini. Returns a clear configuration error if `GEMINI_API_KEY` is missing.
 - `GET /api/drafts` — lists persistent saved drafts.
@@ -51,7 +51,7 @@ Dashboard metrics, campaigns, and scheduled content are in-memory mock data. Con
 
 The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, and scheduled posts remain demonstration data. AI generation is performed server-side, and the API key is never sent to the browser. No social integration is connected.
 
-The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. The campaign is added to the dashboard immediately, but it is stored only in API process memory and resets when that process restarts; separate API workers do not share the entry. Campaign creation does not create ads, schedule posts, or publish content. Metrics remain sample values and are not recalculated from these entries.
+The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. Campaigns are stored in the configured database and remain available after an API restart or across workers. The initial migration adds three clearly marked demo campaigns; campaign creation does not create ads, schedule posts, or publish content. Metrics remain sample values and are not recalculated from these entries.
 
 The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. It sends the topic, platform, objective, tone, and optional notes to Gemini and validates the structured response against the existing content schema and financial-claim checks. Those heuristic checks reject common guaranteed-return wording and numerical performance claims; they cannot verify that financial statements are factually true. Review and edit the generated copy before explicitly saving it; saved drafts use the configured database. You can edit drafts later or mark them approved. Approval does not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Provider credentials are server-side only. The optional Gemini free tier may use submitted content to improve Google's products; avoid including sensitive or personal information. Provider limits and any charges are controlled by your Google AI Studio project.
 
@@ -95,7 +95,7 @@ Only after confirming the target and its current schema state, apply the version
 alembic upgrade head
 ```
 
-The migration creates only the new `drafts` table and its indexes; it does not replace or modify other tables. If the target already has an unversioned `drafts` table or its state is unclear, stop and review it before upgrading. To inspect migration history, run `alembic history`. The corresponding downgrade is `alembic downgrade base`; it removes the table created by this migration and therefore deletes its drafts. Back up any drafts before intentionally downgrading. Migrations never run automatically when the API imports or starts. After a successful migration, start the API with `uvicorn app.main:app --reload`.
+The versioned migrations create only the new `drafts` and `campaigns` tables and their indexes; they do not replace or modify other tables. The campaigns migration also inserts the three documented demo campaign rows into its newly created table. If the target already has an unversioned table or its state is unclear, stop and review it before upgrading. To inspect migration history, run `alembic history`. The corresponding downgrade removes only these project tables and therefore deletes their stored records; back up data before intentionally downgrading. Migrations never run automatically when the API imports or starts. After a successful migration, start the API with `uvicorn app.main:app --reload`.
 
 ### Try content generation
 
@@ -122,7 +122,7 @@ From `web/`, run `npm run lint` and `npm run build`. From `api/`, install `requi
 
 ```text
 web/       Next.js App Router dashboard (TypeScript, Tailwind CSS)
-api/       FastAPI application, SQLAlchemy draft persistence, and Alembic migrations
+api/       FastAPI application, SQLAlchemy campaign/draft persistence, and Alembic migrations
 ```
 
 No secrets, social publishing integration, production database, or deployment configuration are included. Gemini is optional and can incur charges if used with a paid Google AI Studio project.

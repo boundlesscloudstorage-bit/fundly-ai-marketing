@@ -88,7 +88,7 @@ export default function CampaignComposer({ onCreated }: { onCreated: (campaign: 
               </div>
             ) : (
               <>
-                <p className="campaign-dialog-intro">Set up a planning entry for your next idea. It stays in memory and resets when the API restarts.</p>
+                <p className="campaign-dialog-intro">Set up a planning entry for your next idea. It is saved in the configured local database.</p>
                 <form className="campaign-form" onSubmit={submit}>
                   <label className="campaign-field">
                     Campaign name
