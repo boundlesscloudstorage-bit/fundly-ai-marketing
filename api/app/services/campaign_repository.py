@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db_models import CampaignRecord
-from app.models import Campaign, CampaignCreateRequest
+from app.models import Campaign, CampaignCreateRequest, CampaignUpdateRequest
 
 _OBJECTIVE_LABELS = {
     "awareness": "Awareness",
@@ -45,6 +45,27 @@ class CampaignRepository:
         )
         with session.begin():
             session.add(record)
+        return _to_response(record)
+
+    def get(self, session: Session, campaign_id: str) -> Campaign | None:
+        record = session.get(CampaignRecord, campaign_id)
+        return _to_response(record) if record is not None else None
+
+    def update(self, session: Session, campaign_id: str, request: CampaignUpdateRequest) -> Campaign | None:
+        changes = request.model_dump(exclude_unset=True)
+        with session.begin():
+            record = session.get(CampaignRecord, campaign_id)
+            if record is None:
+                return None
+            if "name" in changes:
+                record.name = changes["name"]
+            if "channel" in changes:
+                record.channel = changes["channel"]
+            if "objective" in changes:
+                record.objective = changes["objective"]
+            if "target_date" in changes:
+                record.target_date = changes["target_date"].isoformat()
+            record.updated_at = datetime.now(timezone.utc)
         return _to_response(record)
 
 

@@ -43,6 +43,8 @@ Dashboard metrics and scheduled content are in-memory mock data. Campaigns and d
 - `GET /api/dashboard/overview`
 - `GET /api/campaigns`
 - `POST /api/campaigns` — creates a planning entry in the persistent demo campaign list (201 response).
+- `GET /api/campaigns/{campaign_id}` — retrieves one campaign planning entry.
+- `PATCH /api/campaigns/{campaign_id}` — edits campaign name, channel, objective, or target date.
 - `GET /api/content`
 - `POST /api/content/generate` — requests and validates a structured marketing draft from Gemini. Returns a clear configuration error if `GEMINI_API_KEY` is missing.
 - `GET /api/drafts` — lists persistent saved drafts.
@@ -51,7 +53,7 @@ Dashboard metrics and scheduled content are in-memory mock data. Campaigns and d
 
 The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, and scheduled posts remain demonstration data. AI generation is performed server-side, and the API key is never sent to the browser. No social integration is connected.
 
-The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. Campaigns are stored in the configured database and remain available after an API restart or across workers. The initial migration adds three clearly marked demo campaigns; campaign creation does not create ads, schedule posts, or publish content. Metrics remain sample values and are not recalculated from these entries.
+The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. Campaigns are stored in the configured database and remain available after an API restart or across workers. Use the Edit action on a campaign to update its planning details. The initial migration adds three clearly marked demo campaigns; campaign management does not create ads, schedule posts, or publish content. Metrics remain sample values and are not recalculated from these entries.
 
 The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. It sends the topic, platform, objective, tone, and optional notes to Gemini and validates the structured response against the existing content schema and financial-claim checks. Those heuristic checks reject common guaranteed-return wording and numerical performance claims; they cannot verify that financial statements are factually true. Review and edit the generated copy before explicitly saving it; saved drafts use the configured database. You can edit drafts later or mark them approved. Approval does not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Provider credentials are server-side only. The optional Gemini free tier may use submitted content to improve Google's products; avoid including sensitive or personal information. Provider limits and any charges are controlled by your Google AI Studio project.
 

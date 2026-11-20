@@ -40,6 +40,8 @@ export interface CampaignCreateRequest {
   target_date: string;
 }
 
+export type CampaignUpdateRequest = Partial<CampaignCreateRequest>;
+
 export interface ContentItem {
   id: string;
   brand_id: string;
@@ -326,6 +328,13 @@ export function fetchApiData<T>(
 export function createCampaign(request: CampaignCreateRequest): Promise<Campaign> {
   return requestApiData("/api/campaigns", isCampaign, {
     method: "POST",
+    body: request,
+  });
+}
+
+export function updateCampaign(id: string, request: CampaignUpdateRequest): Promise<Campaign> {
+  return requestApiData(`/api/campaigns/${encodeURIComponent(id)}`, isCampaign, {
+    method: "PATCH",
     body: request,
   });
 }

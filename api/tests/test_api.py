@@ -176,6 +176,30 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(listing.status_code, 200)
         self.assertIn(created_id, {item["id"] for item in listing.json()["items"]})
 
+    def test_campaign_can_be_retrieved_and_updated(self) -> None:
+        campaign_id = self.client.get("/api/campaigns").json()["items"][0]["id"]
+        detail = self.client.get(f"/api/campaigns/{campaign_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["id"], campaign_id)
+
+        response = self.client.patch(
+            f"/api/campaigns/{campaign_id}",
+            json={"name": "Updated planning campaign", "channel": "X", "objective": "engagement"},
+        )
+        self.assertEqual(response.status_code, 200)
+        updated = response.json()
+        self.assertEqual(updated["name"], "Updated planning campaign")
+        self.assertEqual(updated["channel"], "X · Engagement")
+
+        persisted = self.client.get(f"/api/campaigns/{campaign_id}")
+        self.assertEqual(persisted.json()["name"], "Updated planning campaign")
+
+    def test_campaign_update_handles_missing_and_empty_requests(self) -> None:
+        self.assertEqual(self.client.get("/api/campaigns/missing-campaign").status_code, 404)
+        self.assertEqual(self.client.patch("/api/campaigns/missing-campaign", json={"name": "Anything"}).status_code, 404)
+        campaign_id = self.client.get("/api/campaigns").json()["items"][0]["id"]
+        self.assertEqual(self.client.patch(f"/api/campaigns/{campaign_id}", json={}).status_code, 422)
+
     def test_unknown_route_returns_not_found(self) -> None:
         self.assertEqual(self.client.get("/api/missing").status_code, 404)
 

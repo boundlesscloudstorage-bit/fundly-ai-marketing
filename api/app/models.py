@@ -76,6 +76,28 @@ class CampaignCreateRequest(StrictModel):
         return value
 
 
+class CampaignUpdateRequest(StrictModel):
+    name: str | None = Field(default=None, min_length=3, max_length=80)
+    channel: CampaignChannel | None = None
+    objective: CampaignObjective | None = None
+    target_date: date | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 3:
+            raise ValueError("campaign name must contain at least 3 non-whitespace characters")
+        return cleaned
+
+    @field_validator("target_date")
+    @classmethod
+    def validate_target_date(cls, value: date | None) -> date | None:
+        return value
+
+
 class ContentItem(StrictModel):
     id: str
     brand_id: str

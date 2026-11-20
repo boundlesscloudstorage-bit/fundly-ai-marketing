@@ -15,6 +15,7 @@ from app.models import (
     Campaign,
     CampaignCreateRequest,
     CampaignListResponse,
+    CampaignUpdateRequest,
     ContentGenerationRequest,
     ContentListResponse,
     DraftListResponse,
@@ -95,6 +96,35 @@ def create_campaign(
 ) -> Campaign:
     """Create a planning entry; this does not schedule or publish content."""
     return repository.create(session, request)
+
+
+@router.get("/api/campaigns/{campaign_id}", response_model=Campaign, tags=["campaigns"])
+def get_campaign(
+    campaign_id: str,
+    session: Session = Depends(get_session),
+    repository: CampaignRepository = Depends(_get_campaign_repository),
+) -> Campaign:
+    campaign = repository.get(session, campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=404, detail=f"Campaign '{campaign_id}' was not found")
+    return campaign
+
+
+@router.patch("/api/campaigns/{campaign_id}", response_model=Campaign, tags=["campaigns"])
+def update_campaign(
+    campaign_id: str,
+    request: CampaignUpdateRequest,
+    session: Session = Depends(get_session),
+    repository: CampaignRepository = Depends(_get_campaign_repository),
+) -> Campaign:
+    if not request.model_dump(exclude_unset=True):
+        raise HTTPException(status_code=422, detail="Provide a campaign field to update")
+    if any(value is None for value in request.model_dump(exclude_unset=True).values()):
+        raise HTTPException(status_code=422, detail="Campaign fields cannot be set to null")
+    updated = repository.update(session, campaign_id, request)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Campaign '{campaign_id}' was not found")
+    return updated
 
 
 @router.get("/api/content", response_model=ContentListResponse, tags=["content"])

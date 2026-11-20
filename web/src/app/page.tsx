@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import ContentWorkflow from "@/components/content-workflow";
 import CampaignComposer from "@/components/campaign-composer";
+import CampaignEditor from "@/components/campaign-editor";
 
 function Mark({ small = false }: { small?: boolean }) {
   return <span className={`brand-mark${small ? " brand-mark-small" : ""}`} aria-hidden="true"><span>f</span></span>;
@@ -98,7 +99,7 @@ function campaignColor(index: number) {
   return ["purple", "orange", "green"][index % 3];
 }
 
-function CampaignRow({ campaign, index }: { campaign: Campaign; index: number }) {
+function CampaignRow({ campaign, index, onEdit }: { campaign: Campaign; index: number; onEdit: (campaign: Campaign) => void }) {
   const color = campaignColor(index);
   const targetDate = new Date(`${campaign.target_date}T12:00:00`);
   const dateLabel = Number.isNaN(targetDate.getTime())
@@ -113,7 +114,7 @@ function CampaignRow({ campaign, index }: { campaign: Campaign; index: number })
         <div className="campaign-meta">{campaign.channel}</div>
         <div className="progress-track"><span className={color} style={{ width: `${campaign.progress}%` }} /></div>
       </div>
-      <div className="campaign-side"><span className={`status ${campaign.status.toLowerCase() === "planning" ? "planning" : ""}`}><i />{campaign.status}</span><span className="campaign-date">{dateLabel}</span></div>
+      <div className="campaign-side"><span className={`status ${campaign.status.toLowerCase() === "planning" ? "planning" : ""}`}><i />{campaign.status}</span><span className="campaign-date">{dateLabel}</span><button className="campaign-edit-button" type="button" onClick={() => onEdit(campaign)}>Edit</button></div>
     </article>
   );
 }
@@ -163,6 +164,7 @@ export default function Home() {
   const [overview, setOverview] = useState<ApiResource<OverviewResponse>>({ status: "loading" });
   const [campaigns, setCampaigns] = useState<ApiResource<CampaignListResponse>>({ status: "loading" });
   const [content, setContent] = useState<ApiResource<ContentListResponse>>({ status: "loading" });
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
 
@@ -179,6 +181,12 @@ export default function Home() {
         },
       };
     });
+  }
+
+  function replaceCampaign(updated: Campaign) {
+    setCampaigns((current) => current.status === "success"
+      ? { ...current, data: { ...current.data, items: current.data.items.map((item) => item.id === updated.id ? updated : item) } }
+      : current);
   }
 
   useEffect(() => {
@@ -237,7 +245,7 @@ export default function Home() {
               {campaigns.status === "loading" && <div className="resource-state">Loading campaigns…</div>}
               {campaigns.status === "error" && <RetryMessage message={campaigns.message} onRetry={retry} />}
               {campaigns.status === "success" && campaigns.data.items.length === 0 && <div className="resource-state">No campaigns are available yet.</div>}
-              {campaigns.status === "success" && campaigns.data.items.map((campaign, index) => <CampaignRow campaign={campaign} index={index} key={campaign.id} />)}
+              {campaigns.status === "success" && campaigns.data.items.map((campaign, index) => <CampaignRow campaign={campaign} index={index} onEdit={setEditingCampaign} key={campaign.id} />)}
             </div><div className="panel-footnote"><span>ⓘ</span> Campaign details are demonstration data.</div></section>
 
             <section className="panel calendar-panel" id="calendar"><SectionHeading eyebrow="UP NEXT" title="On the calendar" action="View calendar" href="#calendar"/><div className="upcoming-list">
@@ -262,6 +270,7 @@ export default function Home() {
               <div className="studio-disclaimer"><span>✦</span> Content feed examples are separate from saved drafts.</div>
             </section>
           </section>
+          {editingCampaign && <CampaignEditor campaign={editingCampaign} onClose={() => setEditingCampaign(null)} onUpdated={replaceCampaign} />}
           <footer className="page-footer"><span><Mark small /> Made for meaningful momentum.</span><span>Fundly AI Marketing Agent <i>·</i> Local demo</span></footer>
         </div>
       </main>
