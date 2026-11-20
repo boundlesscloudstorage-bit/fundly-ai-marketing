@@ -22,6 +22,26 @@ function Mark({ small = false }: { small?: boolean }) {
   return <span className={`brand-mark${small ? " brand-mark-small" : ""}`} aria-hidden="true"><span>f</span></span>;
 }
 
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("fundly-theme");
+    const isDark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setDark(isDark);
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  }, []);
+
+  function toggle() {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.dataset.theme = next ? "dark" : "light";
+    window.localStorage.setItem("fundly-theme", next ? "dark" : "light");
+  }
+
+  return <button className="theme-toggle" type="button" onClick={toggle} aria-label={`Switch to ${dark ? "light" : "dark"} mode`} aria-pressed={dark}><span aria-hidden="true">{dark ? "☀" : "☾"}</span><span className="theme-toggle-label">{dark ? "Light" : "Dark"}</span></button>;
+}
+
 function Sidebar({ campaignCount, brandName }: { campaignCount: number | null; brandName: string }) {
   return (
     <aside className="sidebar">
@@ -199,7 +219,7 @@ export default function Home() {
     <div className="app-shell">
       <Sidebar campaignCount={campaignCount} brandName={brandName} />
       <main className="main-content" id="overview">
-        <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>{overview.status === "success" ? overview.data.period : "Overview"}</strong></div><div className="topbar-right"><span className="demo-pill"><i /> DEMO DATA</span><span className="icon-button" aria-label="Notifications">♧<i /></span><span className="top-avatar">JD</span></div></header>
+        <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>{overview.status === "success" ? overview.data.period : "Overview"}</strong></div><div className="topbar-right"><ThemeToggle /><span className="demo-pill"><i /> DEMO DATA</span><span className="icon-button" aria-label="Notifications">♧<i /></span><span className="top-avatar">JD</span></div></header>
         <div className="page-wrap">
           <section className="welcome-row"><div><div className="eyebrow">SATURDAY, OCTOBER 24, 2026 <span className="welcome-spark">✦</span></div><h1>Good morning, Jamie <span>☀️</span></h1><p>Here’s what’s happening with your marketing today.</p></div><CampaignComposer onCreated={addCampaign} /></section>
 
