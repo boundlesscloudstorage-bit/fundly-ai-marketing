@@ -30,6 +30,16 @@ export interface CampaignListResponse {
   is_demo: boolean;
 }
 
+export type CampaignChannel = "Instagram" | "LinkedIn" | "X" | "Facebook" | "Email";
+export type CampaignObjective = "awareness" | "education" | "consideration" | "engagement";
+
+export interface CampaignCreateRequest {
+  name: string;
+  channel: CampaignChannel;
+  objective: CampaignObjective;
+  target_date: string;
+}
+
 export interface ContentItem {
   id: string;
   brand_id: string;
@@ -311,4 +321,11 @@ export function fetchApiData<T>(
   signal: AbortSignal,
 ): Promise<T> {
   return requestApiData(path, validate, { signal });
+}
+
+export function createCampaign(request: CampaignCreateRequest): Promise<Campaign> {
+  return requestApiData("/api/campaigns", isCampaign, {
+    method: "POST",
+    body: request,
+  });
 }

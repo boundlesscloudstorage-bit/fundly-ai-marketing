@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from pathlib import Path
 
-from dotenv import load_dotenv
 from fastapi import Request
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-API_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(API_DIR / ".env")
+from app.config import load_environment
+
+load_environment()
 
 
 def get_database_url() -> str:

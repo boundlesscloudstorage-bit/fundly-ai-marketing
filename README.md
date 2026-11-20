@@ -42,6 +42,7 @@ Dashboard metrics, campaigns, and scheduled content are in-memory mock data. Con
 - `GET /health`
 - `GET /api/dashboard/overview`
 - `GET /api/campaigns`
+- `POST /api/campaigns` — creates a planning entry in the process-local demo campaign list (201 response).
 - `GET /api/content`
 - `POST /api/content/generate` — requests and validates a structured marketing draft from Gemini. Returns a clear configuration error if `GEMINI_API_KEY` is missing.
 - `GET /api/drafts` — lists persistent saved drafts.
@@ -50,16 +51,19 @@ Dashboard metrics, campaigns, and scheduled content are in-memory mock data. Con
 
 The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, and scheduled posts remain demonstration data. AI generation is performed server-side, and the API key is never sent to the browser. No social integration is connected.
 
+The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. The campaign is added to the dashboard immediately, but it is stored only in API process memory and resets when that process restarts; separate API workers do not share the entry. Campaign creation does not create ads, schedule posts, or publish content. Metrics remain sample values and are not recalculated from these entries.
+
 The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. It sends the topic, platform, objective, tone, and optional notes to Gemini and validates the structured response against the existing content schema and financial-claim checks. Those heuristic checks reject common guaranteed-return wording and numerical performance claims; they cannot verify that financial statements are factually true. Review and edit the generated copy before explicitly saving it; saved drafts use the configured database. You can edit drafts later or mark them approved. Approval does not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Provider credentials are server-side only. The optional Gemini free tier may use submitted content to improve Google's products; avoid including sensitive or personal information. Provider limits and any charges are controlled by your Google AI Studio project.
 
-To enable real AI generation, add the key to the ignored `api/.env` file (create it from `.env.example` if needed), then restart the API:
+Gemini settings are read from process environment variables first and then from the backend's absolute-path `api/.env`, independent of the server's working directory or import order. To enable real AI generation, add the key to the ignored `api/.env` file (create it from `.env.example` if needed), then restart the API:
 
 ```dotenv
 GEMINI_API_KEY=your_key_from_google_ai_studio
 GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_USE_PROXY=false
 ```
 
-Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey). The example model is configurable with `GEMINI_MODEL`. Without `GEMINI_API_KEY`, generation returns a configuration error and does not produce template content. Automated tests mock provider responses and do not call Gemini or consume API credits.
+Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey). The example model is configurable with `GEMINI_MODEL`. Gemini uses direct HTTPS by default; if your network requires the configured system proxy, set `GEMINI_USE_PROXY=true` and ensure the proxy variables are available to the backend process. Missing keys and invalid model identifiers return configuration errors; provider authentication, unavailable-model, quota, timeout, and request errors have separate sanitized responses. Without `GEMINI_API_KEY`, generation does not produce template content. Automated tests mock provider responses and do not call Gemini or consume API credits.
 
 ### Persistent draft database
 

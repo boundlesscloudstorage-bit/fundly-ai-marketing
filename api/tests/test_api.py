@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from alembic import command
@@ -15,9 +15,17 @@ from app.db_models import DraftRecord
 from app.main import create_app
 from app.models import GeneratedContent
 from app.services.content_generator import (
+    AIAuthenticationError,
+    AIConfigurationError,
     AIInvalidResponseError,
+    AIInvalidModelConfigurationError,
+    AIModelUnavailableError,
+    AIProviderConnectionError,
     AIProviderError,
     AIProviderTimeoutError,
+    AIProviderUnavailableError,
+    AIRequestRejectedError,
+    AIRateLimitError,
     ContentGenerator,
 )
 from app.services.draft_repository import DraftRepository, DraftVersionConflict
@@ -101,6 +109,53 @@ class DemoApiTests(unittest.TestCase):
         self.assertTrue(all(item["is_demo"] for item in campaigns["items"]))
         self.assertEqual(content["total"], len(content["items"]))
         self.assertTrue(all(item["is_ai_generated_example"] for item in content["items"]))
+
+    def test_campaign_creation_adds_a_planning_entry_to_the_demo_list(self) -> None:
+        response = self.client.post(
+            "/api/campaigns",
+            json={
+                "name": "  Spring savings   series ",
+                "channel": "Instagram",
+                "objective": "awareness",
+                "target_date": (date.today() + timedelta(days=7)).isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created = response.json()
+        self.assertTrue(created["id"].startswith("camp-"))
+        self.assertEqual(created["brand_id"], "fundly")
+        self.assertEqual(created["name"], "Spring savings series")
+        self.assertEqual(created["channel"], "Instagram · Awareness")
+        self.assertEqual(created["status"], "Planning")
+        self.assertEqual(created["progress"], 0)
+        self.assertTrue(created["is_demo"])
+
+        listing = self.client.get("/api/campaigns").json()
+        self.assertEqual(listing["total"], 4)
+        self.assertEqual(listing["items"][0]["id"], created["id"])
+
+    def test_campaign_creation_validates_fields_and_does_not_add_invalid_items(self) -> None:
+        valid = {
+            "name": "A campaign",
+            "channel": "LinkedIn",
+            "objective": "education",
+            "target_date": (date.today() + timedelta(days=1)).isoformat(),
+        }
+        invalid_requests = (
+            {**valid, "name": "  "},
+            {**valid, "channel": "Unknown"},
+            {**valid, "target_date": (date.today() - timedelta(days=1)).isoformat()},
+            {**valid, "unexpected": "field"},
+        )
+
+        for payload in invalid_requests:
+            with self.subTest(payload=payload):
+                response = self.client.post("/api/campaigns", json=payload)
+                self.assertEqual(response.status_code, 422)
+
+        listing = self.client.get("/api/campaigns").json()
+        self.assertEqual(listing["total"], 3)
 
     def test_unknown_route_returns_not_found(self) -> None:
         self.assertEqual(self.client.get("/api/missing").status_code, 404)
@@ -204,11 +259,19 @@ class DemoApiTests(unittest.TestCase):
 
     def test_provider_failures_return_sanitized_http_errors(self) -> None:
         cases = (
-            (AIProviderTimeoutError(), 504),
-            (AIInvalidResponseError(), 502),
-            (AIProviderError(), 502),
+            (AIConfigurationError(), 503, "GEMINI_API_KEY"),
+            (AIInvalidModelConfigurationError(), 503, "GEMINI_MODEL"),
+            (AIProviderTimeoutError(), 504, "timed out"),
+            (AIAuthenticationError(), 502, "credentials"),
+            (AIModelUnavailableError(), 502, "model is unavailable"),
+            (AIRateLimitError(), 429, "quota limit"),
+            (AIProviderConnectionError(), 502, "Could not connect to Gemini"),
+            (AIProviderUnavailableError(), 502, "temporarily unavailable"),
+            (AIRequestRejectedError(), 502, "rejected the generation request"),
+            (AIInvalidResponseError(), 502, "could not be validated"),
+            (AIProviderError(), 502, "request failed"),
         )
-        for error, expected_status in cases:
+        for error, expected_status, detail_fragment in cases:
             with self.subTest(expected_status=expected_status, error_type=type(error).__name__):
                 class FailingGenerator:
                     async def generate(self, _request):
@@ -230,7 +293,8 @@ class DemoApiTests(unittest.TestCase):
                 finally:
                     client.close()
                 self.assertEqual(response.status_code, expected_status)
-                self.assertNotIn("GEMINI_API_KEY", response.text)
+                self.assertIn(detail_fragment, response.json()["detail"])
+                self.assertNotIn("fake-secret", response.text)
 
     def test_generated_draft_provenance_is_persisted(self) -> None:
         response = self.client.post(

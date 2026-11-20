@@ -10,8 +10,10 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, SQLAlch
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import SessionFactory, get_session
-from app.mock_data import CAMPAIGNS, CONTENT, OVERVIEW
+from app.mock_data import CONTENT, OVERVIEW
 from app.models import (
+    Campaign,
+    CampaignCreateRequest,
     CampaignListResponse,
     ContentGenerationRequest,
     ContentListResponse,
@@ -23,11 +25,19 @@ from app.models import (
     OverviewResponse,
     SaveDraftRequest,
 )
+from app.services.campaign_store import CampaignStore
 from app.services.content_generator import (
     AIConfigurationError,
+    AIAuthenticationError,
     AIInvalidResponseError,
+    AIInvalidModelConfigurationError,
+    AIModelUnavailableError,
+    AIProviderConnectionError,
     AIProviderError,
     AIProviderTimeoutError,
+    AIProviderUnavailableError,
+    AIRequestRejectedError,
+    AIRateLimitError,
     ContentGenerator,
 )
 from app.services.draft_repository import DraftRepository, DraftVersionConflict
@@ -58,9 +68,22 @@ async def get_overview() -> OverviewResponse:
 
 
 @router.get("/api/campaigns", response_model=CampaignListResponse, tags=["campaigns"])
-async def get_campaigns() -> CampaignListResponse:
-    """Return the in-memory sample campaign list."""
-    return CampaignListResponse(items=CAMPAIGNS, total=len(CAMPAIGNS))
+async def get_campaigns(request: Request) -> CampaignListResponse:
+    """Return sample and locally created demo campaigns."""
+    items = request.app.state.campaign_store.list()
+    return CampaignListResponse(items=items, total=len(items))
+
+
+@router.post(
+    "/api/campaigns",
+    response_model=Campaign,
+    status_code=status.HTTP_201_CREATED,
+    tags=["campaigns"],
+    summary="Create an in-memory campaign for the Fundly demo workspace",
+)
+def create_campaign(request: CampaignCreateRequest, http_request: Request) -> Campaign:
+    """Create a planning entry; this does not schedule or publish content."""
+    return http_request.app.state.campaign_store.create(request)
 
 
 @router.get("/api/content", response_model=ContentListResponse, tags=["content"])
@@ -83,12 +106,47 @@ async def generate_ai_content(request: ContentGenerationRequest, http_request: R
     except AIConfigurationError as exc:
         raise HTTPException(
             status_code=503,
-            detail="AI content generation is not configured. Check GEMINI_API_KEY and GEMINI_MODEL in api/.env.",
+            detail="AI content generation is not configured. Set GEMINI_API_KEY in api/.env.",
+        ) from exc
+    except AIInvalidModelConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_MODEL is invalid. Set it to a Gemini model identifier in api/.env.",
         ) from exc
     except AIProviderTimeoutError as exc:
         raise HTTPException(
             status_code=504,
             detail="The AI provider timed out. Please try again.",
+        ) from exc
+    except AIAuthenticationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini rejected the configured credentials or permissions. Check GEMINI_API_KEY and project access.",
+        ) from exc
+    except AIModelUnavailableError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="The configured Gemini model is unavailable. Check GEMINI_MODEL in api/.env.",
+        ) from exc
+    except AIRateLimitError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail="Gemini rate or quota limit reached. Try later or check the provider quota.",
+        ) from exc
+    except AIProviderConnectionError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not connect to Gemini. Check backend network access and try again.",
+        ) from exc
+    except AIProviderUnavailableError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini is temporarily unavailable. Please retry later.",
+        ) from exc
+    except AIRequestRejectedError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini rejected the generation request. Check the model and request configuration.",
         ) from exc
     except AIInvalidResponseError as exc:
         raise HTTPException(
@@ -165,6 +223,7 @@ def create_app(
     session_factory: sessionmaker[Session] | None = None,
     repository: DraftRepository | None = None,
     content_generator: ContentGenerator | None = None,
+    campaign_store: CampaignStore | None = None,
 ) -> FastAPI:
     """Create an app with an injectable session factory for isolated tests."""
     application = FastAPI(
@@ -178,6 +237,7 @@ def create_app(
     application.state.session_factory = session_factory or SessionFactory
     application.state.draft_repository = repository or DraftRepository()
     application.state.content_generator = content_generator or ContentGenerator()
+    application.state.campaign_store = campaign_store or CampaignStore()
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],

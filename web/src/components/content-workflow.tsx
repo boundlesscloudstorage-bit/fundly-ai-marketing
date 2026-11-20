@@ -269,11 +269,11 @@ export default function ContentWorkflow() {
           <label className="workflow-field">Optional keywords or campaign notes<textarea value={form.keywords} maxLength={240} rows={2} placeholder="Add a few helpful words or constraints" onChange={(event) => setForm({ ...form, keywords: event.target.value })} /></label>
           {formError && <div className="workflow-error" role="alert">{formError}</div>}
           {successMessage && <div className="workflow-success" role="status">{successMessage}</div>}
-          <button className="workflow-button" type="submit" disabled={generating || form.topic.trim().length < 3}>{generating ? "Generating content…" : "✦  Generate content"}</button>
+          <button className="workflow-button" type="submit" disabled={generating || form.topic.trim().length < 3}>{generating ? "Generating content…" : formError && !generated ? "Try generation again" : "✦  Generate content"}</button>
         </form>
 
         {generated && <section className="generated-result" aria-label="Generated marketing content">
-          <div className="generated-result-head"><div><span className="result-badge">{generated.is_demo_generated ? "DEMO EXAMPLE" : "AI-GENERATED DRAFT"}</span><h4>Your starting point</h4></div><span className="result-platform">{displayLabel(generated.platform)} <i>·</i> {displayLabel(generated.tone)}</span></div>
+          <div className="generated-result-head"><div><span className="result-badge">{generated.is_demo_generated ? "DEMO EXAMPLE" : "AI-GENERATED DRAFT"}</span><h4>Your starting point</h4></div><span className="result-platform">{displayLabel(generated.platform)} <i>·</i> {displayLabel(generated.objective)} <i>·</i> {displayLabel(generated.tone)}</span></div>
           <label className="workflow-field">Caption<textarea value={caption} maxLength={2800} rows={5} onChange={(event) => setCaption(event.target.value)} /></label>
           <label className="workflow-field">Suggested hashtags<input value={hashtags} maxLength={360} onChange={(event) => setHashtags(event.target.value)} aria-describedby="generator-hashtag-help" /></label>
           <div className="field-help" id="generator-hashtag-help">Edit or remove tags; separate them with spaces or commas.</div>

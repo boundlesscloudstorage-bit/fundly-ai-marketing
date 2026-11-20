@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./campaign-workflow.css";
 
 export const metadata: Metadata = {
   title: "Fundly | AI Marketing Agent",

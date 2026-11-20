@@ -1,6 +1,7 @@
 """Validated request and response schemas for the demonstration API."""
 
 import re
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -45,6 +46,34 @@ class CampaignListResponse(StrictModel):
     items: list[Campaign]
     total: int = Field(ge=0)
     is_demo: bool = True
+
+
+CampaignChannel = Literal["Instagram", "LinkedIn", "X", "Facebook", "Email"]
+CampaignObjective = Literal["awareness", "education", "consideration", "engagement"]
+
+
+class CampaignCreateRequest(StrictModel):
+    name: str = Field(min_length=3, max_length=80)
+    channel: CampaignChannel
+    objective: CampaignObjective
+    target_date: date
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 3:
+            raise ValueError("campaign name must contain at least 3 non-whitespace characters")
+        if len(cleaned) > 80:
+            raise ValueError("campaign name must contain at most 80 characters")
+        return cleaned
+
+    @field_validator("target_date")
+    @classmethod
+    def validate_target_date(cls, value: date) -> date:
+        if value < date.today():
+            raise ValueError("target_date cannot be in the past")
+        return value
 
 
 class ContentItem(StrictModel):

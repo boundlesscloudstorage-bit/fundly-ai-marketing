@@ -16,6 +16,7 @@ import {
   type OverviewResponse,
 } from "@/lib/api";
 import ContentWorkflow from "@/components/content-workflow";
+import CampaignComposer from "@/components/campaign-composer";
 
 function Mark({ small = false }: { small?: boolean }) {
   return <span className={`brand-mark${small ? " brand-mark-small" : ""}`} aria-hidden="true"><span>f</span></span>;
@@ -145,6 +146,21 @@ export default function Home() {
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
 
+  function addCampaign(campaign: Campaign) {
+    setCampaigns((current) => {
+      const existing = current.status === "success" ? current.data.items : [];
+      const items = [campaign, ...existing.filter((item) => item.id !== campaign.id)];
+      return {
+        status: "success",
+        data: {
+          items,
+          total: current.status === "success" ? current.data.total + 1 : 1,
+          is_demo: true,
+        },
+      };
+    });
+  }
+
   useEffect(() => {
     const controller = new AbortController();
 
@@ -185,7 +201,7 @@ export default function Home() {
       <main className="main-content" id="overview">
         <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>{overview.status === "success" ? overview.data.period : "Overview"}</strong></div><div className="topbar-right"><span className="demo-pill"><i /> DEMO DATA</span><span className="icon-button" aria-label="Notifications">♧<i /></span><span className="top-avatar">JD</span></div></header>
         <div className="page-wrap">
-          <section className="welcome-row"><div><div className="eyebrow">SATURDAY, OCTOBER 24, 2026 <span className="welcome-spark">✦</span></div><h1>Good morning, Jamie <span>☀️</span></h1><p>Here’s what’s happening with your marketing today.</p></div><button className="primary-button" type="button" disabled title="Campaign creation is coming soon"><span>＋</span> New campaign <span className="soon-label">SOON</span></button></section>
+          <section className="welcome-row"><div><div className="eyebrow">SATURDAY, OCTOBER 24, 2026 <span className="welcome-spark">✦</span></div><h1>Good morning, Jamie <span>☀️</span></h1><p>Here’s what’s happening with your marketing today.</p></div><CampaignComposer onCreated={addCampaign} /></section>
 
           <div className="demo-banner"><span className="banner-icon">✦</span><span><strong>Your workspace, ready to explore.</strong> Everything you see here is sample data. AI and social integrations aren’t connected.</span><a href="#studio">Explore the studio <span>→</span></a></div>
 
