@@ -46,6 +46,8 @@ Dashboard metrics and scheduled content are in-memory mock data. Campaigns and d
 - `GET /api/campaigns/{campaign_id}` — retrieves one campaign planning entry.
 - `PATCH /api/campaigns/{campaign_id}` — edits campaign name, channel, objective, or target date.
 - `GET /api/content`
+- `GET /api/calendar` — lists persistent local scheduled entries.
+- `POST /api/calendar` — schedules an approved draft locally; it never publishes to a social network.
 - `POST /api/content/generate` — requests and validates a structured marketing draft from Gemini. Returns a clear configuration error if `GEMINI_API_KEY` is missing.
 - `GET /api/drafts` — lists persistent saved drafts.
 - `POST /api/drafts` — saves reviewed content as a draft (201 response).
@@ -55,7 +57,7 @@ The Next.js dashboard loads these endpoints directly from the API. Dashboard met
 
 The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. Campaigns are stored in the configured database and remain available after an API restart or across workers. Use the Edit action on a campaign to update its planning details. The initial migration adds three clearly marked demo campaigns; campaign management does not create ads, schedule posts, or publish content. Metrics remain sample values and are not recalculated from these entries.
 
-The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. It sends the topic, platform, objective, tone, and optional notes to Gemini and validates the structured response against the existing content schema and financial-claim checks. Those heuristic checks reject common guaranteed-return wording and numerical performance claims; they cannot verify that financial statements are factually true. Review and edit the generated copy before explicitly saving it; saved drafts use the configured database. You can edit drafts later or mark them approved. Approval does not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Provider credentials are server-side only. The optional Gemini free tier may use submitted content to improve Google's products; avoid including sensitive or personal information. Provider limits and any charges are controlled by your Google AI Studio project.
+The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. It sends the topic, platform, objective, tone, and optional notes to Gemini and validates the structured response against the existing content schema and financial-claim checks. Those heuristic checks reject common guaranteed-return wording and numerical performance claims; they cannot verify that financial statements are factually true. Review and edit the generated copy before explicitly saving it; saved drafts use the configured database. You can edit drafts later, mark them approved, and schedule approved drafts in the local planning calendar. Approval and scheduling do not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Provider credentials are server-side only. The optional Gemini free tier may use submitted content to improve Google's products; avoid including sensitive or personal information. Provider limits and any charges are controlled by your Google AI Studio project.
 
 Gemini settings are read from process environment variables first and then from the backend's absolute-path `api/.env`, independent of the server's working directory or import order. To enable real AI generation, add the key to the ignored `api/.env` file (create it from `.env.example` if needed), then restart the API:
 
@@ -97,7 +99,7 @@ Only after confirming the target and its current schema state, apply the version
 alembic upgrade head
 ```
 
-The versioned migrations create only the new `drafts` and `campaigns` tables and their indexes; they do not replace or modify other tables. The campaigns migration also inserts the three documented demo campaign rows into its newly created table. If the target already has an unversioned table or its state is unclear, stop and review it before upgrading. To inspect migration history, run `alembic history`. The corresponding downgrade removes only these project tables and therefore deletes their stored records; back up data before intentionally downgrading. Migrations never run automatically when the API imports or starts. After a successful migration, start the API with `uvicorn app.main:app --reload`.
+The versioned migrations create only the new `drafts`, `campaigns`, and `calendar_entries` tables and their indexes; they do not replace or modify other tables. The campaigns and calendar migrations insert only their documented demo rows into newly created tables. If the target already has an unversioned table or its state is unclear, stop and review it before upgrading. To inspect migration history, run `alembic history`. The corresponding downgrade removes only these project tables and therefore deletes their stored records; back up data before intentionally downgrading. Migrations never run automatically when the API imports or starts. After a successful migration, start the API with `uvicorn app.main:app --reload`.
 
 ### Try content generation
 

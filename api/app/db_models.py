@@ -60,3 +60,19 @@ class CampaignRecord(Base):
     is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CalendarRecord(Base):
+    __tablename__ = "calendar_entries"
+    __table_args__ = (
+        CheckConstraint("status = 'Scheduled'", name="ck_calendar_entries_status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    brand_id: Mapped[str] = mapped_column(String(80), nullable=False, default="fundly", index=True)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="Scheduled")
+    scheduled_for: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from alembic import command
@@ -199,6 +199,47 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(self.client.patch("/api/campaigns/missing-campaign", json={"name": "Anything"}).status_code, 404)
         campaign_id = self.client.get("/api/campaigns").json()["items"][0]["id"]
         self.assertEqual(self.client.patch(f"/api/campaigns/{campaign_id}", json={}).status_code, 422)
+
+    def test_calendar_lists_seed_entries_and_schedules_only_approved_drafts(self) -> None:
+        self.assertEqual(self.client.get("/api/calendar").json()["total"], 2)
+        draft = self.client.post(
+            "/api/drafts",
+            json={
+                "topic": "A calendar test",
+                "caption": "A reviewed Fundly planning note.",
+                "hashtags": ["#Fundly"],
+                "platform": "linkedin",
+                "objective": "education",
+                "tone": "friendly",
+            },
+        ).json()
+        schedule = {
+            "draft_id": draft["id"],
+            "scheduled_for": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+        }
+        self.assertEqual(self.client.post("/api/calendar", json=schedule).status_code, 409)
+        approved = self.client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
+        self.assertEqual(approved.status_code, 200)
+        response = self.client.post("/api/calendar", json=schedule)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["channel"], "LinkedIn")
+        self.assertEqual(self.client.get("/api/calendar").json()["total"], 3)
+
+    def test_calendar_rejects_missing_drafts_and_past_dates(self) -> None:
+        self.assertEqual(
+            self.client.post(
+                "/api/calendar",
+                json={"draft_id": "missing", "scheduled_for": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()},
+            ).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/calendar",
+                json={"draft_id": "missing", "scheduled_for": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()},
+            ).status_code,
+            404,
+        )
 
     def test_unknown_route_returns_not_found(self) -> None:
         self.assertEqual(self.client.get("/api/missing").status_code, 404)

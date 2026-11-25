@@ -8,6 +8,7 @@ import {
   isGeneratedContent,
   isSavedDraftResponse,
   requestApiData,
+  scheduleDraft as scheduleDraftRequest,
   type ApiResource,
   type ContentGenerationRequest,
   type ContentObjective,
@@ -51,20 +52,40 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 }
 
+function localDateTimeOffset(days: number) {
+  const value = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  value.setSeconds(0, 0);
+  value.setHours(9, 0, 0, 0);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
+function toTimezoneIso(value: string) {
+  const local = new Date(value);
+  const offset = -local.getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  const absolute = Math.abs(offset);
+  return `${value}:00${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`;
+}
+
 function DraftCard({
   draft,
   onSave,
   onApprove,
+  onSchedule,
 }: {
   draft: SavedDraft;
   onSave: (draftId: string, caption: string, hashtags: string[]) => Promise<SavedDraft>;
   onApprove: (draftId: string) => Promise<void>;
+  onSchedule: (draftId: string, scheduledFor: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [caption, setCaption] = useState(draft.caption);
   const [hashtags, setHashtags] = useState(draft.hashtags.join(" "));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState(() => localDateTimeOffset(1));
 
   useEffect(() => {
     setCaption(draft.caption);
@@ -91,6 +112,19 @@ function DraftCard({
     setError("");
     try {
       await onApprove(draft.id);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function schedule() {
+    setBusy(true);
+    setError("");
+    try {
+      await onSchedule(draft.id, toTimezoneIso(scheduledFor));
+      setScheduling(false);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -131,9 +165,15 @@ function DraftCard({
           <>
             <button className="secondary-action" type="button" disabled={busy} onClick={() => setEditing(true)}>Edit</button>
             {draft.status === "draft" && <button className="workflow-button compact" type="button" disabled={busy} onClick={approve}>{busy ? "Updating…" : "Mark approved"}</button>}
+            {draft.status === "approved" && <button className="workflow-button compact" type="button" disabled={busy} onClick={() => setScheduling((value) => !value)}>{scheduling ? "Hide picker" : "Schedule locally"}</button>}
           </>
         )}
       </div>
+      {scheduling && draft.status === "approved" && <div className="schedule-picker">
+        <label className="workflow-field">Date and time<input type="datetime-local" value={scheduledFor} min={localDateTimeOffset(0)} onChange={(event) => setScheduledFor(event.target.value)} /></label>
+        <button className="workflow-button compact" type="button" disabled={busy || !scheduledFor} onClick={schedule}>{busy ? "Scheduling…" : "Confirm local schedule"}</button>
+        <span className="field-help">This adds a local planning entry only. Nothing is published.</span>
+      </div>}
     </article>
   );
 }
@@ -253,6 +293,11 @@ export default function ContentWorkflow() {
     applyDraftUpdate(updatedDraft);
   }
 
+  async function scheduleDraft(draftId: string, scheduledFor: string) {
+    await scheduleDraftRequest({ draft_id: draftId, scheduled_for: scheduledFor });
+    setSuccessMessage("Draft scheduled in the local planning calendar. Nothing was published.");
+  }
+
   return (
     <div className="content-workflow">
       <div className="workflow-demo-note"><span>AI CONTENT STUDIO</span> Drafts are generated through the backend’s configured Gemini provider. Review every draft before saving or approving. Saved drafts use the configured database; approval does not publish content.</div>
@@ -287,7 +332,7 @@ export default function ContentWorkflow() {
         {drafts.status === "loading" && <div className="resource-state">Loading saved drafts…</div>}
         {drafts.status === "error" && <div className="resource-state resource-error" role="alert"><span>{drafts.message}</span><button type="button" onClick={refreshDrafts}>Retry</button></div>}
         {drafts.status === "success" && drafts.data.items.length === 0 && <div className="workflow-empty"><span>✦</span><strong>No saved drafts yet</strong><p>Generate a draft, review it, and save it here.</p></div>}
-        {drafts.status === "success" && drafts.data.items.length > 0 && <div className="saved-drafts-grid">{drafts.data.items.map((draft) => <DraftCard key={draft.id} draft={draft} onSave={updateDraft} onApprove={approveDraft} />)}</div>}
+        {drafts.status === "success" && drafts.data.items.length > 0 && <div className="saved-drafts-grid">{drafts.data.items.map((draft) => <DraftCard key={draft.id} draft={draft} onSave={updateDraft} onApprove={approveDraft} onSchedule={scheduleDraft} />)}</div>}
       </section>
     </div>
   );

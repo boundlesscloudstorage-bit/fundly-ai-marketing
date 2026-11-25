@@ -95,5 +95,8 @@
 .campaign-edit-button { border: 0; background: transparent; color: #7657cc; padding: 0; font-size: 8px; font-weight: 700; cursor: pointer; }
 .campaign-edit-button:hover { text-decoration: underline; }
 .campaign-edit-button:focus-visible { outline: 2px solid #8764d5; outline-offset: 2px; }
+.schedule-picker { display: grid; gap: 8px; border-top: 1px solid #f0eff3; margin-top: 10px; padding-top: 10px; }
+.schedule-picker .workflow-button { justify-self: start; }
+:root[data-theme="dark"] .schedule-picker { border-top-color: #38334a; }
 :root[data-theme="dark"] .campaign-edit-button { color: #bca8ff; }
 @media(max-width:700px){.theme-toggle-label{display:none}.theme-toggle{width:28px;justify-content:center;padding:0}.topbar-right{gap:8px}}

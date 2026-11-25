@@ -1,7 +1,7 @@
 """Validated request and response schemas for the demonstration API."""
 
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -113,6 +113,20 @@ class ContentListResponse(StrictModel):
     items: list[ContentItem]
     total: int = Field(ge=0)
     is_demo: bool = True
+
+
+class ScheduleCreateRequest(StrictModel):
+    draft_id: str = Field(min_length=1, max_length=36)
+    scheduled_for: datetime
+
+    @field_validator("scheduled_for")
+    @classmethod
+    def validate_scheduled_for(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("scheduled_for must include a timezone")
+        if value <= datetime.now(value.tzinfo):
+            raise ValueError("scheduled_for must be in the future")
+        return value
 
 
 Platform = Literal["x", "linkedin", "instagram", "facebook"]

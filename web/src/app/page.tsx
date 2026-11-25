@@ -164,6 +164,7 @@ export default function Home() {
   const [overview, setOverview] = useState<ApiResource<OverviewResponse>>({ status: "loading" });
   const [campaigns, setCampaigns] = useState<ApiResource<CampaignListResponse>>({ status: "loading" });
   const [content, setContent] = useState<ApiResource<ContentListResponse>>({ status: "loading" });
+  const [calendar, setCalendar] = useState<ApiResource<ContentListResponse>>({ status: "loading" });
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -210,14 +211,15 @@ export default function Home() {
     load("/api/dashboard/overview", isOverviewResponse, setOverview);
     load("/api/campaigns", isCampaignListResponse, setCampaigns);
     load("/api/content", isContentListResponse, setContent);
+    load("/api/calendar", isContentListResponse, setCalendar);
 
     return () => controller.abort();
   }, [retryKey]);
 
   const brandName = overview.status === "success" ? overview.data.brand_name : "Fundly";
   const campaignCount = campaigns.status === "success" ? campaigns.data.total : null;
-  const scheduledContent = content.status === "success"
-    ? content.data.items.filter((item) => item.status.toLowerCase() === "scheduled")
+  const scheduledContent = calendar.status === "success"
+    ? calendar.data.items.filter((item) => item.status.toLowerCase() === "scheduled")
     : [];
   const draftContent = content.status === "success"
     ? content.data.items.filter((item) => item.status.toLowerCase() === "draft")
@@ -249,11 +251,12 @@ export default function Home() {
             </div><div className="panel-footnote"><span>ⓘ</span> Campaign details are demonstration data.</div></section>
 
             <section className="panel calendar-panel" id="calendar"><SectionHeading eyebrow="UP NEXT" title="On the calendar" action="View calendar" href="#calendar"/><div className="upcoming-list">
+              {calendar.status === "loading" && <div className="resource-state">Loading local calendar…</div>}
               {content.status === "loading" && <div className="resource-state">Loading scheduled content…</div>}
-              {content.status === "error" && <RetryMessage message={content.message} onRetry={retry} />}
-              {content.status === "success" && scheduledContent.length === 0 && <div className="resource-state">No scheduled posts are available yet.</div>}
-              {content.status === "success" && scheduledContent.map((item) => <CalendarPost item={item} key={item.id} />)}
-            </div><div className="panel-footnote"><span>◷</span> Schedule examples from the demo API.</div></section>
+              {calendar.status === "error" && <RetryMessage message={calendar.message} onRetry={retry} />}
+              {calendar.status === "success" && scheduledContent.length === 0 && <div className="resource-state">No scheduled posts are available yet.</div>}
+              {calendar.status === "success" && scheduledContent.map((item) => <CalendarPost item={item} key={item.id} />)}
+            </div><div className="panel-footnote"><span>◷</span> Local planning calendar; nothing is published.</div></section>
           </div>
 
           <section className="studio-section" id="studio">

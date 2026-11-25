@@ -338,3 +338,12 @@ export function updateCampaign(id: string, request: CampaignUpdateRequest): Prom
     body: request,
   });
 }
+
+export interface ScheduleCreateRequest {
+  draft_id: string;
+  scheduled_for: string;
+}
+
+export function scheduleDraft(request: ScheduleCreateRequest): Promise<ContentItem> {
+  return requestApiData("/api/calendar", isContentItem, { method: "POST", body: request });
+}

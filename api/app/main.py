@@ -16,6 +16,7 @@ from app.models import (
     CampaignCreateRequest,
     CampaignListResponse,
     CampaignUpdateRequest,
+    ContentItem,
     ContentGenerationRequest,
     ContentListResponse,
     DraftListResponse,
@@ -25,8 +26,10 @@ from app.models import (
     HealthResponse,
     OverviewResponse,
     SaveDraftRequest,
+    ScheduleCreateRequest,
 )
 from app.services.campaign_repository import CampaignRepository
+from app.services.calendar_repository import CalendarDraftNotApproved, CalendarDraftNotFound, CalendarRepository
 from app.services.content_generator import (
     AIConfigurationError,
     AIAuthenticationError,
@@ -53,6 +56,10 @@ def _get_draft_repository(request: Request) -> DraftRepository:
 
 def _get_campaign_repository(request: Request) -> CampaignRepository:
     return request.app.state.campaign_repository
+
+
+def _get_calendar_repository(request: Request) -> CalendarRepository:
+    return request.app.state.calendar_repository
 
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
@@ -131,6 +138,31 @@ def update_campaign(
 async def get_content() -> ContentListResponse:
     """Return the in-memory sample content list."""
     return ContentListResponse(items=CONTENT, total=len(CONTENT))
+
+
+@router.get("/api/calendar", response_model=ContentListResponse, tags=["calendar"])
+def get_calendar(
+    session: Session = Depends(get_session),
+    repository: CalendarRepository = Depends(_get_calendar_repository),
+) -> ContentListResponse:
+    """List locally scheduled content entries."""
+    items = repository.list(session)
+    return ContentListResponse(items=items, total=len(items), is_demo=True)
+
+
+@router.post("/api/calendar", response_model=ContentItem, status_code=status.HTTP_201_CREATED, tags=["calendar"])
+def schedule_calendar_entry(
+    request: ScheduleCreateRequest,
+    session: Session = Depends(get_session),
+    repository: CalendarRepository = Depends(_get_calendar_repository),
+) -> ContentItem:
+    """Schedule an approved draft locally; no social post is sent."""
+    try:
+        return repository.schedule(session, request)
+    except CalendarDraftNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Draft '{request.draft_id}' was not found") from exc
+    except CalendarDraftNotApproved as exc:
+        raise HTTPException(status_code=409, detail="Only approved drafts can be scheduled locally") from exc
 
 
 @router.post(
@@ -265,6 +297,7 @@ def create_app(
     repository: DraftRepository | None = None,
     content_generator: ContentGenerator | None = None,
     campaign_repository: CampaignRepository | None = None,
+    calendar_repository: CalendarRepository | None = None,
 ) -> FastAPI:
     """Create an app with an injectable session factory for isolated tests."""
     application = FastAPI(
@@ -279,6 +312,7 @@ def create_app(
     application.state.draft_repository = repository or DraftRepository()
     application.state.content_generator = content_generator or ContentGenerator()
     application.state.campaign_repository = campaign_repository or CampaignRepository()
+    application.state.calendar_repository = calendar_repository or CalendarRepository()
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
