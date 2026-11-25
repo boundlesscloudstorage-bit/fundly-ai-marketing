@@ -1,6 +1,6 @@
 """SQLAlchemy persistence models."""
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, JSON, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -66,9 +66,11 @@ class CalendarRecord(Base):
     __tablename__ = "calendar_entries"
     __table_args__ = (
         CheckConstraint("status = 'Scheduled'", name="ck_calendar_entries_status"),
+        Index("uq_calendar_entries_draft_id", "draft_id", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    draft_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     brand_id: Mapped[str] = mapped_column(String(80), nullable=False, default="fundly", index=True)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     title: Mapped[str] = mapped_column(String(160), nullable=False)

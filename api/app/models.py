@@ -115,8 +115,31 @@ class ContentListResponse(StrictModel):
     is_demo: bool = True
 
 
+class CalendarEntry(ContentItem):
+    draft_id: str | None = None
+
+
+class CalendarListResponse(StrictModel):
+    items: list[CalendarEntry]
+    total: int = Field(ge=0)
+    is_demo: bool = True
+
+
 class ScheduleCreateRequest(StrictModel):
     draft_id: str = Field(min_length=1, max_length=36)
+    scheduled_for: datetime
+
+    @field_validator("scheduled_for")
+    @classmethod
+    def validate_scheduled_for(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("scheduled_for must include a timezone")
+        if value <= datetime.now(value.tzinfo):
+            raise ValueError("scheduled_for must be in the future")
+        return value
+
+
+class ScheduleUpdateRequest(StrictModel):
     scheduled_for: datetime
 
     @field_validator("scheduled_for")

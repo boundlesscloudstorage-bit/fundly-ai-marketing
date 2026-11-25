@@ -16,6 +16,8 @@ from app.models import (
     CampaignCreateRequest,
     CampaignListResponse,
     CampaignUpdateRequest,
+    CalendarEntry,
+    CalendarListResponse,
     ContentItem,
     ContentGenerationRequest,
     ContentListResponse,
@@ -27,9 +29,16 @@ from app.models import (
     OverviewResponse,
     SaveDraftRequest,
     ScheduleCreateRequest,
+    ScheduleUpdateRequest,
 )
 from app.services.campaign_repository import CampaignRepository
-from app.services.calendar_repository import CalendarDraftNotApproved, CalendarDraftNotFound, CalendarRepository
+from app.services.calendar_repository import (
+    CalendarDraftNotApproved,
+    CalendarDraftNotFound,
+    CalendarEntryAlreadyScheduled,
+    CalendarEntryNotFound,
+    CalendarRepository,
+)
 from app.services.content_generator import (
     AIConfigurationError,
     AIAuthenticationError,
@@ -140,22 +149,22 @@ async def get_content() -> ContentListResponse:
     return ContentListResponse(items=CONTENT, total=len(CONTENT))
 
 
-@router.get("/api/calendar", response_model=ContentListResponse, tags=["calendar"])
+@router.get("/api/calendar", response_model=CalendarListResponse, tags=["calendar"])
 def get_calendar(
     session: Session = Depends(get_session),
     repository: CalendarRepository = Depends(_get_calendar_repository),
-) -> ContentListResponse:
+) -> CalendarListResponse:
     """List locally scheduled content entries."""
     items = repository.list(session)
-    return ContentListResponse(items=items, total=len(items), is_demo=True)
+    return CalendarListResponse(items=items, total=len(items), is_demo=True)
 
 
-@router.post("/api/calendar", response_model=ContentItem, status_code=status.HTTP_201_CREATED, tags=["calendar"])
+@router.post("/api/calendar", response_model=CalendarEntry, status_code=status.HTTP_201_CREATED, tags=["calendar"])
 def schedule_calendar_entry(
     request: ScheduleCreateRequest,
     session: Session = Depends(get_session),
     repository: CalendarRepository = Depends(_get_calendar_repository),
-) -> ContentItem:
+) -> CalendarEntry:
     """Schedule an approved draft locally; no social post is sent."""
     try:
         return repository.schedule(session, request)
@@ -163,6 +172,33 @@ def schedule_calendar_entry(
         raise HTTPException(status_code=404, detail=f"Draft '{request.draft_id}' was not found") from exc
     except CalendarDraftNotApproved as exc:
         raise HTTPException(status_code=409, detail="Only approved drafts can be scheduled locally") from exc
+    except CalendarEntryAlreadyScheduled as exc:
+        raise HTTPException(status_code=409, detail="This draft is already scheduled locally") from exc
+
+
+@router.patch("/api/calendar/{entry_id}", response_model=CalendarEntry, tags=["calendar"])
+def reschedule_calendar_entry(
+    entry_id: str,
+    request: ScheduleUpdateRequest,
+    session: Session = Depends(get_session),
+    repository: CalendarRepository = Depends(_get_calendar_repository),
+) -> CalendarEntry:
+    try:
+        return repository.reschedule(session, entry_id, request)
+    except CalendarEntryNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Calendar entry '{entry_id}' was not found") from exc
+
+
+@router.delete("/api/calendar/{entry_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["calendar"])
+def unschedule_calendar_entry(
+    entry_id: str,
+    session: Session = Depends(get_session),
+    repository: CalendarRepository = Depends(_get_calendar_repository),
+) -> None:
+    try:
+        repository.unschedule(session, entry_id)
+    except CalendarEntryNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Calendar entry '{entry_id}' was not found") from exc
 
 
 @router.post(

@@ -223,7 +223,16 @@ class DemoApiTests(unittest.TestCase):
         response = self.client.post("/api/calendar", json=schedule)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["channel"], "LinkedIn")
-        self.assertEqual(self.client.get("/api/calendar").json()["total"], 3)
+        entry = response.json()
+        self.assertEqual(entry["draft_id"], draft["id"])
+        self.assertEqual(self.client.post("/api/calendar", json=schedule).status_code, 409)
+        moved = self.client.patch(
+            f"/api/calendar/{entry['id']}",
+            json={"scheduled_for": (datetime.now(timezone.utc) + timedelta(days=4)).isoformat()},
+        )
+        self.assertEqual(moved.status_code, 200)
+        self.assertEqual(self.client.delete(f"/api/calendar/{entry['id']}").status_code, 204)
+        self.assertEqual(self.client.get("/api/calendar").json()["total"], 2)
 
     def test_calendar_rejects_missing_drafts_and_past_dates(self) -> None:
         self.assertEqual(

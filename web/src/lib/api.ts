@@ -59,6 +59,16 @@ export interface ContentListResponse {
   is_demo: boolean;
 }
 
+export interface CalendarEntry extends ContentItem {
+  draft_id: string | null;
+}
+
+export interface CalendarListResponse {
+  items: CalendarEntry[];
+  total: number;
+  is_demo: boolean;
+}
+
 export type Platform = "x" | "linkedin" | "instagram" | "facebook";
 export type ContentObjective = "brand_awareness" | "engagement" | "education" | "product_promotion";
 export type ContentTone = "professional" | "inspiring" | "friendly" | "persuasive";
@@ -266,7 +276,7 @@ export function isDraftListResponse(value: unknown): value is DraftListResponse 
 }
 
 export interface ApiRequestOptions {
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
 }
@@ -309,6 +319,8 @@ export async function requestApiData<T>(
     throw new Error(detail ?? `The API returned ${response.status} ${response.statusText}.`);
   }
 
+  if (response.status === 204) return undefined as T;
+
   const payload: unknown = await response.json();
   if (!validate(payload)) {
     throw new Error("The API returned data in an unexpected format.");
@@ -344,6 +356,23 @@ export interface ScheduleCreateRequest {
   scheduled_for: string;
 }
 
-export function scheduleDraft(request: ScheduleCreateRequest): Promise<ContentItem> {
-  return requestApiData("/api/calendar", isContentItem, { method: "POST", body: request });
+export function scheduleDraft(request: ScheduleCreateRequest): Promise<CalendarEntry> {
+  return requestApiData("/api/calendar", isCalendarEntry, { method: "POST", body: request });
+}
+
+function isCalendarEntry(value: unknown): value is CalendarEntry {
+  if (!isRecord(value) || !isContentItem(value)) return false;
+  return value.draft_id === null || isString(value.draft_id);
+}
+
+export function isCalendarListResponse(value: unknown): value is CalendarListResponse {
+  return isRecord(value) && Array.isArray(value.items) && value.items.every(isCalendarEntry) && typeof value.total === "number" && Number.isInteger(value.total) && value.total >= 0 && isBoolean(value.is_demo);
+}
+
+export function rescheduleCalendarEntry(id: string, scheduledFor: string): Promise<CalendarEntry> {
+  return requestApiData(`/api/calendar/${encodeURIComponent(id)}`, isCalendarEntry, { method: "PATCH", body: { scheduled_for: scheduledFor } });
+}
+
+export async function unscheduleCalendarEntry(id: string): Promise<void> {
+  await requestApiData(`/api/calendar/${encodeURIComponent(id)}`, (value): value is undefined => value === undefined, { method: "DELETE" });
 }

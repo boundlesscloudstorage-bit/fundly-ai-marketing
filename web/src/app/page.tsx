@@ -4,12 +4,17 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
   API_BASE_URL,
   fetchApiData,
+  isCalendarListResponse,
   isCampaignListResponse,
   isContentListResponse,
   isOverviewResponse,
+  rescheduleCalendarEntry,
+  unscheduleCalendarEntry,
   type ApiResource,
   type Campaign,
   type CampaignListResponse,
+  type CalendarEntry,
+  type CalendarListResponse,
   type ContentItem,
   type ContentListResponse,
   type Metric,
@@ -138,13 +143,46 @@ function formatScheduledDate(value: string) {
   };
 }
 
-function CalendarPost({ item }: { item: ContentItem }) {
+function localDateTimeValue(value: string) {
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function timezoneIso(value: string) {
+  const date = new Date(value);
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  const absolute = Math.abs(offset);
+  return `${value}:00${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`;
+}
+
+function CalendarPost({ item, onUpdated, onRemoved }: { item: CalendarEntry; onUpdated: (entry: CalendarEntry) => void; onRemoved: (id: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState(() => localDateTimeValue(item.scheduled_for));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const date = formatScheduledDate(item.scheduled_for);
+  async function reschedule() {
+    setBusy(true); setError("");
+    try { onUpdated(await rescheduleCalendarEntry(item.id, timezoneIso(scheduledFor))); setEditing(false); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not reschedule this entry."); }
+    finally { setBusy(false); }
+  }
+  async function unschedule() {
+    if (!window.confirm("Remove this entry from the local calendar?")) return;
+    setBusy(true); setError("");
+    try { await unscheduleCalendarEntry(item.id); onRemoved(item.id); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not unschedule this entry."); }
+    finally { setBusy(false); }
+  }
   return (
     <article className="upcoming-row">
       <div className="date-tile"><span>{date.weekday}</span><strong>{date.day}</strong><small>{date.month}</small></div>
       <div className="upcoming-info"><strong>{item.title}</strong><span><i className={`channel-dot ${contentColor(item.channel)}`} />{item.channel}<span className="meta-sep">·</span>{date.time}</span></div>
-      <span className="row-arrow" aria-hidden="true">›</span>
+      <div className="calendar-actions"><button type="button" disabled={busy} onClick={() => setEditing((value) => !value)}>{editing ? "Close" : "Edit"}</button><button type="button" disabled={busy} onClick={unschedule}>Unschedule</button></div>
+      {editing && <div className="calendar-reschedule"><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} /><button type="button" disabled={busy || !scheduledFor} onClick={reschedule}>{busy ? "Saving…" : "Save"}</button></div>}
+      {error && <span className="calendar-error" role="alert">{error}</span>}
     </article>
   );
 }
@@ -164,7 +202,7 @@ export default function Home() {
   const [overview, setOverview] = useState<ApiResource<OverviewResponse>>({ status: "loading" });
   const [campaigns, setCampaigns] = useState<ApiResource<CampaignListResponse>>({ status: "loading" });
   const [content, setContent] = useState<ApiResource<ContentListResponse>>({ status: "loading" });
-  const [calendar, setCalendar] = useState<ApiResource<ContentListResponse>>({ status: "loading" });
+  const [calendar, setCalendar] = useState<ApiResource<CalendarListResponse>>({ status: "loading" });
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -190,6 +228,18 @@ export default function Home() {
       : current);
   }
 
+  function replaceCalendar(updated: CalendarEntry) {
+    setCalendar((current) => current.status === "success"
+      ? { ...current, data: { ...current.data, items: current.data.items.map((item) => item.id === updated.id ? updated : item) } }
+      : current);
+  }
+
+  function removeCalendar(id: string) {
+    setCalendar((current) => current.status === "success"
+      ? { ...current, data: { ...current.data, items: current.data.items.filter((item) => item.id !== id), total: current.data.total - 1 } }
+      : current);
+  }
+
   useEffect(() => {
     const controller = new AbortController();
 
@@ -211,7 +261,7 @@ export default function Home() {
     load("/api/dashboard/overview", isOverviewResponse, setOverview);
     load("/api/campaigns", isCampaignListResponse, setCampaigns);
     load("/api/content", isContentListResponse, setContent);
-    load("/api/calendar", isContentListResponse, setCalendar);
+    load("/api/calendar", isCalendarListResponse, setCalendar);
 
     return () => controller.abort();
   }, [retryKey]);
@@ -255,7 +305,7 @@ export default function Home() {
               {content.status === "loading" && <div className="resource-state">Loading scheduled content…</div>}
               {calendar.status === "error" && <RetryMessage message={calendar.message} onRetry={retry} />}
               {calendar.status === "success" && scheduledContent.length === 0 && <div className="resource-state">No scheduled posts are available yet.</div>}
-              {calendar.status === "success" && scheduledContent.map((item) => <CalendarPost item={item} key={item.id} />)}
+              {calendar.status === "success" && scheduledContent.map((item) => <CalendarPost item={item} onUpdated={replaceCalendar} onRemoved={removeCalendar} key={item.id} />)}
             </div><div className="panel-footnote"><span>◷</span> Local planning calendar; nothing is published.</div></section>
           </div>
 
