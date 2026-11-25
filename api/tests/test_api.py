@@ -691,7 +691,7 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_cors_preflight_allows_draft_mutations(self) -> None:
-        for method in ("POST", "PATCH"):
+        for method in ("POST", "PATCH", "DELETE"):
             with self.subTest(method=method):
                 response = self.client.options(
                     "/api/drafts",
