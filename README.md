@@ -2,7 +2,7 @@
 
 Fundly AI Marketing Agent is a local-first marketing dashboard prototype. Fundly is the first sample brand; the mock models include a brand identifier so the platform can grow to support more brands.
 
-> **Local prototype:** Dashboard metrics and scheduled posts are fictional sample data; campaigns and drafts use the configured local database. Content generation calls the configured Gemini API from the backend. Draft approval is an internal status only; no social network is connected and nothing can be published.
+> **Local prototype:** Dashboard campaign and calendar counts use the configured local database, while engagement and reach estimates remain fictional sample data. Content generation calls the configured Gemini API from the backend. Draft approval is an internal status only; no social network is connected and nothing can be published.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ uvicorn app.main:app --reload
 
 If PowerShell blocks virtual environment activation, allow it for the current terminal with `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then run the activation command again. The API is at [http://localhost:8000](http://localhost:8000); interactive API docs are at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-Dashboard metrics and scheduled content are in-memory mock data. Campaigns and drafts use persistent database storage. Content generation uses the configured Gemini API; no template fallback is used when configuration is missing:
+Dashboard campaign and calendar counts use persistent database storage. Engagement and reach estimates remain mock data. Campaigns and drafts use persistent database storage. Content generation uses the configured Gemini API; no template fallback is used when configuration is missing:
 
 - `GET /health`
 - `GET /api/dashboard/overview`
@@ -55,9 +55,9 @@ Dashboard metrics and scheduled content are in-memory mock data. Campaigns and d
 - `POST /api/drafts` — saves reviewed content as a draft (201 response).
 - `PATCH /api/drafts/{draft_id}` — edits caption/hashtags or marks a draft approved.
 
-The Next.js dashboard loads these endpoints directly from the API. Dashboard metrics, campaigns, and scheduled posts remain demonstration data. AI generation is performed server-side, and the API key is never sent to the browser. No social integration is connected.
+The Next.js dashboard loads these endpoints directly from the API. Campaign and calendar counts reflect locally persisted records; engagement and reach remain demonstration estimates. AI generation is performed server-side, and the API key is never sent to the browser. No social integration is connected.
 
-The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. Campaigns are stored in the configured database and remain available after an API restart or across workers. Use the Edit action on a campaign to update its planning details. The initial migration adds three clearly marked demo campaigns; campaign management does not create ads, schedule posts, or publish content. Metrics remain sample values and are not recalculated from these entries.
+The **New campaign** form creates a local planning entry with a name, channel, objective, and target date. Campaigns are stored in the configured database and remain available after an API restart or across workers. Use the Edit action on a campaign to update its planning details. The initial migration adds three clearly marked demo campaigns; campaign management does not create ads, schedule posts, or publish content. The active-campaign and scheduled-content cards recalculate from persisted records; engagement and reach remain sample estimates.
 
 The content studio supports X, LinkedIn, Instagram, and Facebook draft formats. It sends the topic, platform, objective, tone, and optional notes to Gemini and validates the structured response against the existing content schema and financial-claim checks. Those heuristic checks reject common guaranteed-return wording and numerical performance claims; they cannot verify that financial statements are factually true. Review and edit the generated copy before explicitly saving it; saved drafts use the configured database. You can edit drafts later, mark them approved, and schedule approved drafts in the local planning calendar. Existing entries can be rescheduled or removed without deleting their drafts. Each draft can have at most one local calendar entry. Approval and scheduling do not publish anything. Editing changed caption or hashtag content on an approved draft resets it to draft; no-op edits preserve approval. Provider credentials are server-side only. The optional Gemini free tier may use submitted content to improve Google's products; avoid including sensitive or personal information. Provider limits and any charges are controlled by your Google AI Studio project.
 

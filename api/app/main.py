@@ -81,11 +81,35 @@ async def health() -> HealthResponse:
     "/api/dashboard/overview",
     response_model=OverviewResponse,
     tags=["dashboard"],
-    summary="Get demo dashboard metrics for the Fundly brand",
+    summary="Get dashboard metrics for the Fundly brand",
 )
-async def get_overview() -> OverviewResponse:
-    """Return fictional, clearly marked overview metrics."""
-    return OverviewResponse.model_validate(OVERVIEW)
+def get_overview(
+    session: Session = Depends(get_session),
+    campaign_repository: CampaignRepository = Depends(_get_campaign_repository),
+    calendar_repository: CalendarRepository = Depends(_get_calendar_repository),
+) -> OverviewResponse:
+    """Return persisted campaign/calendar counts alongside demo-only estimates."""
+    campaigns = campaign_repository.list(session)
+    calendar_entries = calendar_repository.list(session)
+    overview = {
+        **OVERVIEW,
+        "metrics": [
+            {
+                "label": "Active campaigns",
+                "value": f"{len(campaigns):02d}",
+                "change": "Persisted locally",
+                "is_demo": False,
+            },
+            {
+                "label": "Scheduled content",
+                "value": str(len(calendar_entries)),
+                "change": "Local planning entries",
+                "is_demo": False,
+            },
+            *OVERVIEW["metrics"][2:],
+        ],
+    }
+    return OverviewResponse.model_validate(overview)
 
 
 @router.get("/api/campaigns", response_model=CampaignListResponse, tags=["campaigns"])

@@ -100,7 +100,26 @@ class DemoApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["brand_id"], "fundly")
         self.assertTrue(payload["is_demo"])
-        self.assertTrue(all(metric["is_demo"] for metric in payload["metrics"]))
+        self.assertEqual(payload["metrics"][0]["value"], "03")
+        self.assertEqual(payload["metrics"][1]["value"], "2")
+        self.assertFalse(payload["metrics"][0]["is_demo"])
+        self.assertFalse(payload["metrics"][1]["is_demo"])
+        self.assertTrue(all(metric["is_demo"] for metric in payload["metrics"][2:]))
+
+    def test_overview_counts_reflect_persisted_campaign_and_calendar_entries(self) -> None:
+        campaign = self.client.post(
+            "/api/campaigns",
+            json={
+                "name": "Overview count campaign",
+                "channel": "Instagram",
+                "objective": "awareness",
+                "target_date": (date.today() + timedelta(days=7)).isoformat(),
+            },
+        )
+        self.assertEqual(campaign.status_code, 201)
+        overview = self.client.get("/api/dashboard/overview").json()
+        self.assertEqual(overview["metrics"][0]["value"], "04")
+        self.assertEqual(overview["metrics"][1]["value"], "2")
 
     def test_campaigns_and_content_are_demo_records(self) -> None:
         campaigns = self.client.get("/api/campaigns").json()
