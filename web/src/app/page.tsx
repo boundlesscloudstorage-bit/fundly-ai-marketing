@@ -226,6 +226,7 @@ export default function Home() {
   const [calendarFocusId, setCalendarFocusId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showQuickNav, setShowQuickNav] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -331,12 +332,13 @@ export default function Home() {
   const visibleActivity = activity.status === "success" && activityFilter !== "all"
     ? activity.data.items.filter((item) => item.kind === activityFilter && `${item.title} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase()))
     : activity.status === "success" ? activity.data.items.filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase())) : [];
+  const resourceErrors = [overview, campaigns, content, calendar, activity].filter((resource): resource is { status: "error"; message: string } => resource.status === "error");
 
   return (
     <div className="app-shell">
       <Sidebar campaignCount={campaignCount} brandName={brandName} />
       <main className="main-content" id="overview">
-        <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>{overview.status === "success" ? overview.data.period : "Overview"}</strong></div><div className="topbar-right"><ThemeToggle /><span className="demo-pill"><i /> DEMO DATA</span><span className="icon-button" aria-label="Notifications">♧<i /></span><span className="top-avatar">JD</span></div></header>
+        <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>{overview.status === "success" ? overview.data.period : "Overview"}</strong></div><div className="topbar-right"><ThemeToggle /><span className="demo-pill"><i /> DEMO DATA</span><button type="button" className="icon-button" aria-label="Notifications" aria-expanded={showNotifications} onClick={() => setShowNotifications((value) => !value)}>♧<i /></button><span className="top-avatar">JD</span></div>{showNotifications && <div className="notifications-panel" role="dialog" aria-label="Notifications"><div className="notifications-heading"><strong>Notifications</strong><button type="button" onClick={() => setShowNotifications(false)} aria-label="Close notifications">×</button></div>{resourceErrors.map((resource, index) => <p className="notification-error" key={`error-${index}`}>API request needs attention: {resource.message}</p>)}{activity.status === "success" && activity.data.items.slice(0, 4).map((item) => <a href="#activity" className="notification-item" key={item.id} onClick={() => setShowNotifications(false)}><span className={`activity-dot ${item.kind}`} /><span><strong>{item.title}</strong><small>{item.detail}</small></span></a>)}{resourceErrors.length === 0 && (activity.status !== "success" || activity.data.items.length === 0) && <p className="notification-empty">No new notifications.</p>}</div>}</header>
         <div className="page-wrap">
           <section className="welcome-row"><div><div className="eyebrow">SATURDAY, OCTOBER 24, 2026 <span className="welcome-spark">✦</span></div><h1>Good morning, Jamie <span>☀️</span></h1><p>Here’s what’s happening with your marketing today.</p></div><CampaignComposer onCreated={addCampaign} /></section>
 
