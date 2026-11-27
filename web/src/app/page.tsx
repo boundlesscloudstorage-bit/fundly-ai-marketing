@@ -248,6 +248,27 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
 
+  useEffect(() => {
+    const saved = window.localStorage;
+    setSearchQuery(saved.getItem("fundly-search") || "");
+    setCampaignStatusFilter(saved.getItem("fundly-campaign-status") || "all");
+    setCampaignChannelFilter(saved.getItem("fundly-campaign-channel") || "all");
+    setCalendarMonthFilter(saved.getItem("fundly-calendar-month") || "all");
+    setCalendarView(saved.getItem("fundly-calendar-view") === "grid" ? "grid" : "list");
+    const savedActivity = saved.getItem("fundly-activity-filter");
+    if (savedActivity === "campaign" || savedActivity === "draft" || savedActivity === "calendar") setActivityFilter(savedActivity);
+  }, []);
+
+  useEffect(() => {
+    const saved = window.localStorage;
+    saved.setItem("fundly-search", searchQuery);
+    saved.setItem("fundly-campaign-status", campaignStatusFilter);
+    saved.setItem("fundly-campaign-channel", campaignChannelFilter);
+    saved.setItem("fundly-calendar-month", calendarMonthFilter);
+    saved.setItem("fundly-calendar-view", calendarView);
+    saved.setItem("fundly-activity-filter", activityFilter);
+  }, [searchQuery, campaignStatusFilter, campaignChannelFilter, calendarMonthFilter, calendarView, activityFilter]);
+
   function addCampaign(campaign: Campaign) {
     setCampaigns((current) => {
       const existing = current.status === "success" ? current.data.items : [];
