@@ -287,6 +287,10 @@ export default function Home() {
   const visibleCalendar = calendarMonthFilter === "all"
     ? scheduledContent
     : scheduledContent.filter((item) => item.scheduled_for.startsWith(calendarMonthFilter));
+  const selectedMonthIndex = calendarMonths.indexOf(calendarMonthFilter);
+  const todayMonth = new Date().toISOString().slice(0, 7);
+  const canGoPrevious = selectedMonthIndex > 0;
+  const canGoNext = selectedMonthIndex >= 0 && selectedMonthIndex < calendarMonths.length - 1;
   const draftContent = content.status === "success"
     ? content.data.items.filter((item) => item.status.toLowerCase() === "draft")
     : [];
@@ -320,7 +324,7 @@ export default function Home() {
               {campaigns.status === "success" && visibleCampaigns.map((campaign, index) => <CampaignRow campaign={campaign} index={index} onEdit={setEditingCampaign} key={campaign.id} />)}
             </div><div className="panel-footnote"><span>ⓘ</span> Campaign details are demonstration data.</div></section>
 
-            <section className="panel calendar-panel" id="calendar"><SectionHeading eyebrow="UP NEXT" title="On the calendar" action="View calendar" href="#calendar"/><div className="calendar-filter"><label>Month<select value={calendarMonthFilter} onChange={(event) => setCalendarMonthFilter(event.target.value)}><option value="all">All dates</option>{calendarMonths.map((month) => <option value={month} key={month}>{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`))}</option>)}</select></label></div><div className="upcoming-list">
+            <section className="panel calendar-panel" id="calendar"><SectionHeading eyebrow="UP NEXT" title="On the calendar" action="View calendar" href="#calendar"/><div className="calendar-filter"><button type="button" onClick={() => setCalendarMonthFilter(calendarMonths[selectedMonthIndex - 1])} disabled={!canGoPrevious} aria-label="Previous month">‹</button><label>Month<select value={calendarMonthFilter} onChange={(event) => setCalendarMonthFilter(event.target.value)}><option value="all">All dates</option>{calendarMonths.map((month) => <option value={month} key={month}>{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`))}</option>)}</select></label><button type="button" onClick={() => setCalendarMonthFilter(calendarMonths[selectedMonthIndex + 1])} disabled={!canGoNext} aria-label="Next month">›</button><button type="button" onClick={() => setCalendarMonthFilter(todayMonth)} className="today-button">Today</button></div><div className="upcoming-list">
               {calendar.status === "loading" && <div className="resource-state">Loading local calendar…</div>}
               {content.status === "loading" && <div className="resource-state">Loading scheduled content…</div>}
               {calendar.status === "error" && <RetryMessage message={calendar.message} onRetry={retry} />}
