@@ -4,6 +4,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
   API_BASE_URL,
   fetchApiData,
+  isActivityListResponse,
   isCalendarListResponse,
   isCampaignListResponse,
   isContentListResponse,
@@ -11,6 +12,7 @@ import {
   rescheduleCalendarEntry,
   unscheduleCalendarEntry,
   type ApiResource,
+  type ActivityListResponse,
   type Campaign,
   type CampaignListResponse,
   type CalendarEntry,
@@ -203,6 +205,7 @@ export default function Home() {
   const [campaigns, setCampaigns] = useState<ApiResource<CampaignListResponse>>({ status: "loading" });
   const [content, setContent] = useState<ApiResource<ContentListResponse>>({ status: "loading" });
   const [calendar, setCalendar] = useState<ApiResource<CalendarListResponse>>({ status: "loading" });
+  const [activity, setActivity] = useState<ApiResource<ActivityListResponse>>({ status: "loading" });
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -262,6 +265,7 @@ export default function Home() {
     load("/api/campaigns", isCampaignListResponse, setCampaigns);
     load("/api/content", isContentListResponse, setContent);
     load("/api/calendar", isCalendarListResponse, setCalendar);
+    load("/api/dashboard/activity", isActivityListResponse, setActivity);
 
     return () => controller.abort();
   }, [retryKey]);
@@ -308,6 +312,15 @@ export default function Home() {
               {calendar.status === "success" && scheduledContent.map((item) => <CalendarPost item={item} onUpdated={replaceCalendar} onRemoved={removeCalendar} key={item.id} />)}
             </div><div className="panel-footnote"><span>◷</span> Local planning calendar; nothing is published.</div></section>
           </div>
+
+          <section className="panel activity-panel" id="activity" aria-labelledby="activity-title">
+            <SectionHeading eyebrow="RECENT ACTIVITY" title="Workspace timeline" href="#activity" />
+            {activity.status === "loading" && <div className="resource-state">Loading activity…</div>}
+            {activity.status === "error" && <RetryMessage message={activity.message} onRetry={retry} />}
+            {activity.status === "success" && activity.data.items.length === 0 && <div className="resource-state">No workspace activity yet.</div>}
+            {activity.status === "success" && activity.data.items.length > 0 && <div className="activity-list">{activity.data.items.map((item) => <article className="activity-item" key={item.id}><span className={`activity-dot ${item.kind}`} /><div><strong>{item.title}</strong><p>{item.detail}</p></div><time dateTime={item.occurred_at}>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(item.occurred_at))}</time></article>)}</div>}
+            <div className="panel-footnote"><span>◷</span> Activity is local workspace data; no publishing occurs.</div>
+          </section>
 
           <section className="studio-section" id="studio">
             <div className="studio-intro"><div><div className="eyebrow"><span className="eyebrow-star">✦</span> YOUR CREATIVE CORNER</div><h2>Content studio</h2><p>Create a demo draft, refine it, and keep it in your workspace.</p></div></div>

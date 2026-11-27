@@ -110,3 +110,16 @@
 :root[data-theme="dark"] .schedule-picker { border-top-color: #38334a; }
 :root[data-theme="dark"] .campaign-edit-button { color: #bca8ff; }
 @media(max-width:700px){.theme-toggle-label{display:none}.theme-toggle{width:28px;justify-content:center;padding:0}.topbar-right{gap:8px}}
+
+.activity-panel { margin-top: 18px; }
+.activity-list { display: grid; gap: 0; }
+.activity-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eeeaf4; }
+.activity-item:last-child { border-bottom: 0; }
+.activity-dot { width: 8px; height: 8px; border-radius: 50%; background: #8764d5; flex: 0 0 auto; }
+.activity-dot.draft { background: #e49a68; }
+.activity-dot.calendar { background: #63b59a; }
+.activity-item div { min-width: 0; flex: 1; }
+.activity-item strong { display: block; color: var(--ink); font-size: 12px; }
+.activity-item p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
+.activity-item time { color: var(--muted); font-size: 9px; white-space: nowrap; }
+:root[data-theme="dark"] .activity-item { border-bottom-color: #38334a; }

@@ -41,6 +41,7 @@ Dashboard campaign and calendar counts use persistent database storage. Engageme
 
 - `GET /health`
 - `GET /api/dashboard/overview`
+- `GET /api/dashboard/activity` — returns recent persisted campaign, draft, and calendar activity.
 - `GET /api/campaigns`
 - `POST /api/campaigns` — creates a planning entry in the persistent demo campaign list (201 response).
 - `GET /api/campaigns/{campaign_id}` — retrieves one campaign planning entry.

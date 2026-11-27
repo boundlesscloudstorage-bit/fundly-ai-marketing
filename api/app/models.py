@@ -31,6 +31,21 @@ class OverviewResponse(StrictModel):
     is_demo: bool = True
 
 
+class ActivityItem(StrictModel):
+    id: str
+    kind: Literal["campaign", "draft", "calendar"]
+    title: str
+    detail: str
+    occurred_at: str
+    is_demo: bool = True
+
+
+class ActivityListResponse(StrictModel):
+    items: list[ActivityItem]
+    total: int = Field(ge=0)
+    is_demo: bool = True
+
+
 class Campaign(StrictModel):
     id: str
     brand_id: str

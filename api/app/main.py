@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
+from datetime import timezone
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import SessionFactory, get_session
+from app.db_models import CalendarRecord, CampaignRecord, DraftRecord
 from app.mock_data import CONTENT, OVERVIEW
 from app.models import (
     Campaign,
@@ -18,6 +21,8 @@ from app.models import (
     CampaignUpdateRequest,
     CalendarEntry,
     CalendarListResponse,
+    ActivityItem,
+    ActivityListResponse,
     ContentItem,
     ContentGenerationRequest,
     ContentListResponse,
@@ -110,6 +115,29 @@ def get_overview(
         ],
     }
     return OverviewResponse.model_validate(overview)
+
+
+@router.get("/api/dashboard/activity", response_model=ActivityListResponse, tags=["dashboard"])
+def get_activity(session: Session = Depends(get_session)) -> ActivityListResponse:
+    """Return a recent, read-only activity feed from persisted workspace records."""
+    events: list[ActivityItem] = []
+    for record in session.scalars(select(CampaignRecord).order_by(CampaignRecord.updated_at.desc()).limit(10)).all():
+        occurred = record.updated_at
+        if occurred.tzinfo is None:
+            occurred = occurred.replace(tzinfo=timezone.utc)
+        events.append(ActivityItem(id=f"campaign:{record.id}", kind="campaign", title=record.name, detail=f"Campaign {record.status.lower()}", occurred_at=occurred.isoformat(), is_demo=record.is_demo))
+    for record in session.scalars(select(DraftRecord).order_by(DraftRecord.updated_at.desc()).limit(10)).all():
+        occurred = record.updated_at
+        if occurred.tzinfo is None:
+            occurred = occurred.replace(tzinfo=timezone.utc)
+        events.append(ActivityItem(id=f"draft:{record.id}", kind="draft", title=record.topic, detail=f"Draft {record.status}", occurred_at=occurred.isoformat(), is_demo=record.is_demo_generated))
+    for record in session.scalars(select(CalendarRecord).order_by(CalendarRecord.scheduled_for.desc()).limit(10)).all():
+        occurred = record.scheduled_for
+        if occurred.tzinfo is None:
+            occurred = occurred.replace(tzinfo=timezone.utc)
+        events.append(ActivityItem(id=f"calendar:{record.id}", kind="calendar", title=record.title, detail=f"Scheduled on {record.channel}", occurred_at=occurred.isoformat(), is_demo=record.is_demo))
+    events.sort(key=lambda item: item.occurred_at, reverse=True)
+    return ActivityListResponse(items=events[:12], total=len(events[:12]), is_demo=any(item.is_demo for item in events))
 
 
 @router.get("/api/campaigns", response_model=CampaignListResponse, tags=["campaigns"])

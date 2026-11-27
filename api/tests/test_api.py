@@ -121,6 +121,15 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(overview["metrics"][0]["value"], "04")
         self.assertEqual(overview["metrics"][1]["value"], "2")
 
+    def test_activity_returns_persisted_workspace_events(self) -> None:
+        response = self.client.get("/api/dashboard/activity")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], len(payload["items"]))
+        self.assertGreaterEqual(payload["total"], 5)
+        self.assertTrue({item["kind"] for item in payload["items"]} >= {"campaign", "calendar"})
+        self.assertTrue(all(item["occurred_at"] for item in payload["items"]))
+
     def test_campaigns_and_content_are_demo_records(self) -> None:
         campaigns = self.client.get("/api/campaigns").json()
         content = self.client.get("/api/content").json()

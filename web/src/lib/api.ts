@@ -13,6 +13,21 @@ export interface OverviewResponse {
   is_demo: boolean;
 }
 
+export interface ActivityItem {
+  id: string;
+  kind: "campaign" | "draft" | "calendar";
+  title: string;
+  detail: string;
+  occurred_at: string;
+  is_demo: boolean;
+}
+
+export interface ActivityListResponse {
+  items: ActivityItem[];
+  total: number;
+  is_demo: boolean;
+}
+
 export interface Campaign {
   id: string;
   brand_id: string;
@@ -134,6 +149,10 @@ function isString(value: unknown): value is string {
   return typeof value === "string";
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
@@ -178,6 +197,15 @@ export function isOverviewResponse(value: unknown): value is OverviewResponse {
     value.metrics.every(isMetric) &&
     isBoolean(value.is_demo)
   );
+}
+
+export function isActivityListResponse(value: unknown): value is ActivityListResponse {
+  if (!isRecord(value) || !Array.isArray(value.items) || !isNumber(value.total) || typeof value.is_demo !== "boolean") return false;
+  return value.items.every((item) => isRecord(item) && isString(item.id) && (item.kind === "campaign" || item.kind === "draft" || item.kind === "calendar") && isString(item.title) && isString(item.detail) && isString(item.occurred_at) && typeof item.is_demo === "boolean");
+}
+
+export function getActivity(): Promise<ActivityListResponse> {
+  return requestApiData("/api/dashboard/activity", isActivityListResponse);
 }
 
 function isCampaign(value: unknown): value is Campaign {
