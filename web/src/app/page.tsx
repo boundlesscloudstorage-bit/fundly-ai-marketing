@@ -12,6 +12,7 @@ import {
   rescheduleCalendarEntry,
   unscheduleCalendarEntry,
   type ApiResource,
+  type ActivityItem,
   type ActivityListResponse,
   type Campaign,
   type CampaignListResponse,
@@ -206,6 +207,7 @@ export default function Home() {
   const [content, setContent] = useState<ApiResource<ContentListResponse>>({ status: "loading" });
   const [calendar, setCalendar] = useState<ApiResource<CalendarListResponse>>({ status: "loading" });
   const [activity, setActivity] = useState<ApiResource<ActivityListResponse>>({ status: "loading" });
+  const [activityFilter, setActivityFilter] = useState<"all" | ActivityItem["kind"]>("all");
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -278,6 +280,9 @@ export default function Home() {
   const draftContent = content.status === "success"
     ? content.data.items.filter((item) => item.status.toLowerCase() === "draft")
     : [];
+  const visibleActivity = activity.status === "success" && activityFilter !== "all"
+    ? activity.data.items.filter((item) => item.kind === activityFilter)
+    : activity.status === "success" ? activity.data.items : [];
 
   return (
     <div className="app-shell">
@@ -315,10 +320,13 @@ export default function Home() {
 
           <section className="panel activity-panel" id="activity" aria-labelledby="activity-title">
             <SectionHeading eyebrow="RECENT ACTIVITY" title="Workspace timeline" href="#activity" />
+            <div className="activity-filters" role="group" aria-label="Filter activity">
+              {(["all", "campaign", "draft", "calendar"] as const).map((filter) => <button key={filter} type="button" className={activityFilter === filter ? "active" : ""} onClick={() => setActivityFilter(filter)}>{filter === "all" ? "All" : filter === "calendar" ? "Calendar" : `${filter[0].toUpperCase()}${filter.slice(1)}s`}</button>)}
+            </div>
             {activity.status === "loading" && <div className="resource-state">Loading activity…</div>}
             {activity.status === "error" && <RetryMessage message={activity.message} onRetry={retry} />}
-            {activity.status === "success" && activity.data.items.length === 0 && <div className="resource-state">No workspace activity yet.</div>}
-            {activity.status === "success" && activity.data.items.length > 0 && <div className="activity-list">{activity.data.items.map((item) => <article className="activity-item" key={item.id}><span className={`activity-dot ${item.kind}`} /><div><strong>{item.title}</strong><p>{item.detail}</p></div><time dateTime={item.occurred_at}>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(item.occurred_at))}</time></article>)}</div>}
+            {activity.status === "success" && visibleActivity.length === 0 && <div className="resource-state">{activity.data.items.length === 0 ? "No workspace activity yet." : "No activity matches this filter."}</div>}
+            {activity.status === "success" && visibleActivity.length > 0 && <div className="activity-list">{visibleActivity.map((item) => <article className="activity-item" key={item.id}><span className={`activity-dot ${item.kind}`} /><div><strong>{item.title}</strong><p>{item.detail}</p></div><time dateTime={item.occurred_at}>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(item.occurred_at))}</time></article>)}</div>}
             <div className="panel-footnote"><span>◷</span> Activity is local workspace data; no publishing occurs.</div>
           </section>
 

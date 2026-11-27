@@ -112,6 +112,9 @@
 @media(max-width:700px){.theme-toggle-label{display:none}.theme-toggle{width:28px;justify-content:center;padding:0}.topbar-right{gap:8px}}
 
 .activity-panel { margin-top: 18px; }
+.activity-filters { display: flex; gap: 6px; margin: 0 0 4px; }
+.activity-filters button { border: 1px solid #e5e2eb; border-radius: 12px; background: transparent; color: var(--muted); padding: 4px 9px; font-size: 9px; cursor: pointer; }
+.activity-filters button.active { border-color: #8764d5; background: #f0eafd; color: #7657cc; font-weight: 700; }
 .activity-list { display: grid; gap: 0; }
 .activity-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eeeaf4; }
 .activity-item:last-child { border-bottom: 0; }
@@ -123,3 +126,5 @@
 .activity-item p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
 .activity-item time { color: var(--muted); font-size: 9px; white-space: nowrap; }
 :root[data-theme="dark"] .activity-item { border-bottom-color: #38334a; }
+:root[data-theme="dark"] .activity-filters button { border-color: #5a4f72; color: #bca8ff; }
+:root[data-theme="dark"] .activity-filters button.active { background: #332950; }
