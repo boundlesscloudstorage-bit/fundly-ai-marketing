@@ -146,6 +146,16 @@ function formatScheduledDate(value: string) {
   };
 }
 
+function monthGrid(month: string) {
+  const start = new Date(`${month}-01T12:00:00`);
+  const offset = start.getDay();
+  const count = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+  return Array.from({ length: Math.ceil((offset + count) / 7) * 7 }, (_, index) => {
+    const day = index - offset + 1;
+    return day > 0 && day <= count ? `${month}-${String(day).padStart(2, "0")}` : null;
+  });
+}
+
 function localDateTimeValue(value: string) {
   const date = new Date(value);
   const pad = (part: number) => String(part).padStart(2, "0");
@@ -211,6 +221,7 @@ export default function Home() {
   const [campaignStatusFilter, setCampaignStatusFilter] = useState("all");
   const [campaignChannelFilter, setCampaignChannelFilter] = useState("all");
   const [calendarMonthFilter, setCalendarMonthFilter] = useState("all");
+  const [calendarView, setCalendarView] = useState<"list" | "grid">("list");
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -291,6 +302,8 @@ export default function Home() {
   const todayMonth = new Date().toISOString().slice(0, 7);
   const canGoPrevious = selectedMonthIndex > 0;
   const canGoNext = selectedMonthIndex >= 0 && selectedMonthIndex < calendarMonths.length - 1;
+  const gridMonth = calendarMonthFilter === "all" ? calendarMonths[0] : calendarMonthFilter;
+  const gridDays = gridMonth ? monthGrid(gridMonth) : [];
   const draftContent = content.status === "success"
     ? content.data.items.filter((item) => item.status.toLowerCase() === "draft")
     : [];
@@ -324,13 +337,13 @@ export default function Home() {
               {campaigns.status === "success" && visibleCampaigns.map((campaign, index) => <CampaignRow campaign={campaign} index={index} onEdit={setEditingCampaign} key={campaign.id} />)}
             </div><div className="panel-footnote"><span>ⓘ</span> Campaign details are demonstration data.</div></section>
 
-            <section className="panel calendar-panel" id="calendar"><SectionHeading eyebrow="UP NEXT" title="On the calendar" action="View calendar" href="#calendar"/><div className="calendar-filter"><button type="button" onClick={() => setCalendarMonthFilter(calendarMonths[selectedMonthIndex - 1])} disabled={!canGoPrevious} aria-label="Previous month">‹</button><label>Month<select value={calendarMonthFilter} onChange={(event) => setCalendarMonthFilter(event.target.value)}><option value="all">All dates</option>{calendarMonths.map((month) => <option value={month} key={month}>{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`))}</option>)}</select></label><button type="button" onClick={() => setCalendarMonthFilter(calendarMonths[selectedMonthIndex + 1])} disabled={!canGoNext} aria-label="Next month">›</button><button type="button" onClick={() => setCalendarMonthFilter(todayMonth)} className="today-button">Today</button></div><div className="upcoming-list">
+            <section className="panel calendar-panel" id="calendar"><SectionHeading eyebrow="UP NEXT" title="On the calendar" action="View calendar" href="#calendar"/><div className="calendar-toolbar"><div className="calendar-filter"><button type="button" onClick={() => setCalendarMonthFilter(calendarMonths[selectedMonthIndex - 1])} disabled={!canGoPrevious} aria-label="Previous month">‹</button><label>Month<select value={calendarMonthFilter} onChange={(event) => setCalendarMonthFilter(event.target.value)}><option value="all">All dates</option>{calendarMonths.map((month) => <option value={month} key={month}>{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`))}</option>)}</select></label><button type="button" onClick={() => setCalendarMonthFilter(calendarMonths[selectedMonthIndex + 1])} disabled={!canGoNext} aria-label="Next month">›</button><button type="button" onClick={() => setCalendarMonthFilter(todayMonth)} className="today-button">Today</button></div><div className="calendar-view-toggle" role="group" aria-label="Calendar view"><button type="button" className={calendarView === "list" ? "active" : ""} onClick={() => setCalendarView("list")}>List</button><button type="button" className={calendarView === "grid" ? "active" : ""} onClick={() => setCalendarView("grid")}>Month</button></div></div>{calendarView === "list" ? <div className="upcoming-list">
               {calendar.status === "loading" && <div className="resource-state">Loading local calendar…</div>}
               {content.status === "loading" && <div className="resource-state">Loading scheduled content…</div>}
               {calendar.status === "error" && <RetryMessage message={calendar.message} onRetry={retry} />}
               {calendar.status === "success" && visibleCalendar.length === 0 && <div className="resource-state">{scheduledContent.length === 0 ? "No scheduled posts are available yet." : "No posts are scheduled in this month."}</div>}
               {calendar.status === "success" && visibleCalendar.map((item) => <CalendarPost item={item} onUpdated={replaceCalendar} onRemoved={removeCalendar} key={item.id} />)}
-            </div><div className="panel-footnote"><span>◷</span> Local planning calendar; nothing is published.</div></section>
+            </div> : <div className="calendar-grid"><div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid-days">{gridDays.map((day, index) => <div className="calendar-grid-day" key={`${day ?? "empty"}-${index}`}>{day && <><strong>{Number(day.slice(-2))}</strong>{scheduledContent.filter((item) => item.scheduled_for.startsWith(day)).map((item) => <span key={item.id} title={item.title}>{item.title}</span>)}</>}</div>)}</div></div>}<div className="panel-footnote"><span>◷</span> Local planning calendar; nothing is published.</div></section>
           </div>
 
           <section className="panel activity-panel" id="activity" aria-labelledby="activity-title">
