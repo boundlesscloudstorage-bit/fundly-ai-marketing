@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   API_BASE_URL,
   fetchApiData,
@@ -225,9 +225,27 @@ export default function Home() {
   const [calendarView, setCalendarView] = useState<"list" | "grid">("list");
   const [calendarFocusId, setCalendarFocusId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showQuickNav, setShowQuickNav] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setShowQuickNav(true);
+      }
+      if (event.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (event.key === "Escape") setShowQuickNav(false);
+    }
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
 
   function addCampaign(campaign: Campaign) {
     setCampaigns((current) => {
@@ -324,7 +342,9 @@ export default function Home() {
 
           <div className="demo-banner"><span className="banner-icon">✦</span><span><strong>Your workspace, ready to explore.</strong> Everything you see here is sample data. AI and social integrations aren’t connected.</span><a href="#studio">Explore the studio <span>→</span></a></div>
 
-          <div className="workspace-search"><label htmlFor="workspace-search-input">Search workspace</label><input id="workspace-search-input" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search campaigns, drafts, or calendar entries" /><span aria-hidden="true">⌕</span></div>
+          <div className="workspace-search"><label htmlFor="workspace-search-input">Search workspace <kbd>Ctrl K</kbd></label><input ref={searchInputRef} id="workspace-search-input" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search campaigns, drafts, or calendar entries" /><span aria-hidden="true">⌕</span><button type="button" className="quick-nav-trigger" onClick={() => setShowQuickNav(true)}>Quick jump</button></div>
+
+          {showQuickNav && <div className="quick-nav" role="dialog" aria-modal="true" aria-label="Quick navigation"><div className="quick-nav-card"><div className="quick-nav-heading"><strong>Jump to</strong><button type="button" onClick={() => setShowQuickNav(false)} aria-label="Close quick navigation">×</button></div>{[{ label: "Campaigns", href: "#campaigns" }, { label: "Calendar", href: "#calendar" }, { label: "Activity", href: "#activity" }, { label: "Content studio", href: "#studio" }].map((item) => <a href={item.href} key={item.href} onClick={() => setShowQuickNav(false)}>{item.label}<span>→</span></a>)}</div></div>}
 
           <section className="stats-grid" aria-label="Demo performance metrics">
             {overview.status === "loading" && <LoadingMetrics />}
