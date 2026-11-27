@@ -170,11 +170,12 @@ function timezoneIso(value: string) {
   return `${value}:00${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`;
 }
 
-function CalendarPost({ item, onUpdated, onRemoved }: { item: CalendarEntry; onUpdated: (entry: CalendarEntry) => void; onRemoved: (id: string) => void }) {
+function CalendarPost({ item, onUpdated, onRemoved, startEditing = false }: { item: CalendarEntry; onUpdated: (entry: CalendarEntry) => void; onRemoved: (id: string) => void; startEditing?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [scheduledFor, setScheduledFor] = useState(() => localDateTimeValue(item.scheduled_for));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => { if (startEditing) setEditing(true); }, [startEditing]);
   const date = formatScheduledDate(item.scheduled_for);
   async function reschedule() {
     setBusy(true); setError("");
@@ -222,6 +223,7 @@ export default function Home() {
   const [campaignChannelFilter, setCampaignChannelFilter] = useState("all");
   const [calendarMonthFilter, setCalendarMonthFilter] = useState("all");
   const [calendarView, setCalendarView] = useState<"list" | "grid">("list");
+  const [calendarFocusId, setCalendarFocusId] = useState<string | null>(null);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -342,8 +344,8 @@ export default function Home() {
               {content.status === "loading" && <div className="resource-state">Loading scheduled content…</div>}
               {calendar.status === "error" && <RetryMessage message={calendar.message} onRetry={retry} />}
               {calendar.status === "success" && visibleCalendar.length === 0 && <div className="resource-state">{scheduledContent.length === 0 ? "No scheduled posts are available yet." : "No posts are scheduled in this month."}</div>}
-              {calendar.status === "success" && visibleCalendar.map((item) => <CalendarPost item={item} onUpdated={replaceCalendar} onRemoved={removeCalendar} key={item.id} />)}
-            </div> : <div className="calendar-grid"><div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid-days">{gridDays.map((day, index) => <div className="calendar-grid-day" key={`${day ?? "empty"}-${index}`}>{day && <><strong>{Number(day.slice(-2))}</strong>{scheduledContent.filter((item) => item.scheduled_for.startsWith(day)).map((item) => <span key={item.id} title={item.title}>{item.title}</span>)}</>}</div>)}</div></div>}<div className="panel-footnote"><span>◷</span> Local planning calendar; nothing is published.</div></section>
+              {calendar.status === "success" && visibleCalendar.map((item) => <CalendarPost item={item} onUpdated={replaceCalendar} onRemoved={removeCalendar} startEditing={item.id === calendarFocusId} key={item.id} />)}
+            </div> : <div className="calendar-grid"><div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid-days">{gridDays.map((day, index) => <div className="calendar-grid-day" key={`${day ?? "empty"}-${index}`}>{day && <><strong>{Number(day.slice(-2))}</strong>{scheduledContent.filter((item) => item.scheduled_for.startsWith(day)).map((item) => <button type="button" className="calendar-grid-entry" key={item.id} title={`Edit ${item.title}`} onClick={() => { setCalendarFocusId(item.id); setCalendarMonthFilter(day.slice(0, 7)); setCalendarView("list"); }}>{item.title}</button>)}</>}</div>)}</div></div>}<div className="panel-footnote"><span>◷</span> Local planning calendar; nothing is published.</div></section>
           </div>
 
           <section className="panel activity-panel" id="activity" aria-labelledby="activity-title">
