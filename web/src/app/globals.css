@@ -156,4 +156,9 @@
 :root[data-theme="dark"] .calendar-grid-day { border-color: #38334a; }
 :root[data-theme="dark"] .calendar-grid-day span { background: #332950; color: #c8b9ff; }
 :root[data-theme="dark"] .calendar-grid-entry { background: #332950; color: #c8b9ff; }
+.activity-filters button:focus-visible,
+.calendar-filter button:focus-visible,
+.calendar-filter select:focus-visible,
+.calendar-view-toggle button:focus-visible,
+.calendar-grid-entry:focus-visible { outline: 2px solid #a98bea; outline-offset: 2px; }
 @media(max-width:700px){.calendar-toolbar{align-items:flex-start;flex-direction:column}.calendar-view-toggle{align-self:flex-end}.calendar-grid-day{min-height:42px}.calendar-grid-day span{font-size:6px}}

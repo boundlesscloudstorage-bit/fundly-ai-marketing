@@ -351,7 +351,7 @@ export default function Home() {
           <section className="panel activity-panel" id="activity" aria-labelledby="activity-title">
             <SectionHeading eyebrow="RECENT ACTIVITY" title="Workspace timeline" href="#activity" />
             <div className="activity-filters" role="group" aria-label="Filter activity">
-              {(["all", "campaign", "draft", "calendar"] as const).map((filter) => <button key={filter} type="button" className={activityFilter === filter ? "active" : ""} onClick={() => setActivityFilter(filter)}>{filter === "all" ? "All" : filter === "calendar" ? "Calendar" : `${filter[0].toUpperCase()}${filter.slice(1)}s`}</button>)}
+              {(["all", "campaign", "draft", "calendar"] as const).map((filter) => <button key={filter} type="button" className={activityFilter === filter ? "active" : ""} aria-pressed={activityFilter === filter} onClick={() => setActivityFilter(filter)}>{filter === "all" ? "All" : filter === "calendar" ? "Calendar" : `${filter[0].toUpperCase()}${filter.slice(1)}s`}</button>)}
             </div>
             {activity.status === "loading" && <div className="resource-state">Loading activity…</div>}
             {activity.status === "error" && <RetryMessage message={activity.message} onRetry={retry} />}
