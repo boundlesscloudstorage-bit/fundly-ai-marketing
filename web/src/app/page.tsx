@@ -224,6 +224,7 @@ export default function Home() {
   const [calendarMonthFilter, setCalendarMonthFilter] = useState("all");
   const [calendarView, setCalendarView] = useState<"list" | "grid">("list");
   const [calendarFocusId, setCalendarFocusId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -291,10 +292,10 @@ export default function Home() {
   const brandName = overview.status === "success" ? overview.data.brand_name : "Fundly";
   const campaignCount = campaigns.status === "success" ? campaigns.data.total : null;
   const visibleCampaigns = campaigns.status === "success"
-    ? campaigns.data.items.filter((campaign) => (campaignStatusFilter === "all" || campaign.status === campaignStatusFilter) && (campaignChannelFilter === "all" || campaign.channel.startsWith(campaignChannelFilter)))
+    ? campaigns.data.items.filter((campaign) => (campaignStatusFilter === "all" || campaign.status === campaignStatusFilter) && (campaignChannelFilter === "all" || campaign.channel.startsWith(campaignChannelFilter)) && `${campaign.name} ${campaign.channel} ${campaign.status}`.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
   const scheduledContent = calendar.status === "success"
-    ? calendar.data.items.filter((item) => item.status.toLowerCase() === "scheduled")
+    ? calendar.data.items.filter((item) => item.status.toLowerCase() === "scheduled" && `${item.title} ${item.body} ${item.channel}`.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
   const calendarMonths = [...new Set(scheduledContent.map((item) => item.scheduled_for.slice(0, 7)))].sort();
   const visibleCalendar = calendarMonthFilter === "all"
@@ -307,11 +308,11 @@ export default function Home() {
   const gridMonth = calendarMonthFilter === "all" ? calendarMonths[0] : calendarMonthFilter;
   const gridDays = gridMonth ? monthGrid(gridMonth) : [];
   const draftContent = content.status === "success"
-    ? content.data.items.filter((item) => item.status.toLowerCase() === "draft")
+    ? content.data.items.filter((item) => item.status.toLowerCase() === "draft" && `${item.title} ${item.body} ${item.channel}`.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
   const visibleActivity = activity.status === "success" && activityFilter !== "all"
-    ? activity.data.items.filter((item) => item.kind === activityFilter)
-    : activity.status === "success" ? activity.data.items : [];
+    ? activity.data.items.filter((item) => item.kind === activityFilter && `${item.title} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase()))
+    : activity.status === "success" ? activity.data.items.filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase())) : [];
 
   return (
     <div className="app-shell">
@@ -322,6 +323,8 @@ export default function Home() {
           <section className="welcome-row"><div><div className="eyebrow">SATURDAY, OCTOBER 24, 2026 <span className="welcome-spark">✦</span></div><h1>Good morning, Jamie <span>☀️</span></h1><p>Here’s what’s happening with your marketing today.</p></div><CampaignComposer onCreated={addCampaign} /></section>
 
           <div className="demo-banner"><span className="banner-icon">✦</span><span><strong>Your workspace, ready to explore.</strong> Everything you see here is sample data. AI and social integrations aren’t connected.</span><a href="#studio">Explore the studio <span>→</span></a></div>
+
+          <div className="workspace-search"><label htmlFor="workspace-search-input">Search workspace</label><input id="workspace-search-input" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search campaigns, drafts, or calendar entries" /><span aria-hidden="true">⌕</span></div>
 
           <section className="stats-grid" aria-label="Demo performance metrics">
             {overview.status === "loading" && <LoadingMetrics />}

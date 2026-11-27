@@ -156,6 +156,13 @@
 :root[data-theme="dark"] .calendar-grid-day { border-color: #38334a; }
 :root[data-theme="dark"] .calendar-grid-day span { background: #332950; color: #c8b9ff; }
 :root[data-theme="dark"] .calendar-grid-entry { background: #332950; color: #c8b9ff; }
+.workspace-search { position: relative; margin: -2px 0 18px; }
+.workspace-search label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .4px; }
+.workspace-search input { width: 100%; height: 36px; border: 1px solid #e5e2eb; border-radius: 7px; background: #fff; color: var(--ink); padding: 0 34px 0 11px; font-size: 11px; }
+.workspace-search input::placeholder { color: #aaa8b3; }
+.workspace-search > span { position: absolute; right: 11px; bottom: 9px; color: #8a6ad5; font-size: 16px; }
+:root[data-theme="dark"] .workspace-search input { border-color: #5a4f72; background: #292536; color: #f1eff8; }
+.workspace-search input:focus-visible { outline: 2px solid #a98bea; outline-offset: 2px; }
 .activity-filters button:focus-visible,
 .calendar-filter button:focus-visible,
 .calendar-filter select:focus-visible,
