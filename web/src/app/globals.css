@@ -183,6 +183,12 @@
 .workspace-actions button { border: 1px solid #e5e2eb; border-radius: 5px; background: transparent; color: #7657cc; padding: 4px 7px; font-size: 8px; cursor: pointer; }
 .workspace-actions .quick-nav-trigger { position: static; }
 :root[data-theme="dark"] .workspace-actions button { border-color: #5a4f72; color: #c8b9ff; }
+.workspace-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 18px; }
+.summary-item { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; border: 1px solid #efedf3; border-radius: 7px; background: #fff; padding: 8px 10px; }
+.summary-item strong { color: var(--ink); font-size: 14px; }
+.summary-item span { color: var(--muted); font-size: 8px; text-align: right; }
+:root[data-theme="dark"] .summary-item { border-color: #4a455b; background: #211d2b; }
+@media(max-width:700px){.workspace-summary{grid-template-columns:1fr 1fr}.summary-item{display:grid;gap:2px}.summary-item span{text-align:left}}
 .quick-nav { position: fixed; inset: 0; z-index: 10; display: flex; align-items: flex-start; justify-content: center; padding-top: 120px; background: #201b2b66; }
 .quick-nav-card { width: min(360px, calc(100% - 30px)); border: 1px solid #e5e2eb; border-radius: 10px; background: var(--paper); box-shadow: 0 14px 40px #17132540; padding: 12px; }
 .quick-nav-heading { display: flex; justify-content: space-between; align-items: center; color: var(--ink); font-size: 12px; margin-bottom: 6px; }
