@@ -133,3 +133,7 @@
 .campaign-filters label { display: grid; gap: 3px; color: var(--muted); font-size: 8px; }
 .campaign-filters select { border: 1px solid #e5e2eb; border-radius: 5px; background: transparent; color: var(--ink); padding: 4px 6px; font-size: 9px; }
 :root[data-theme="dark"] .campaign-filters select { border-color: #5a4f72; background: #292536; color: #f1eff8; }
+.calendar-filter { display: flex; justify-content: flex-end; margin: -2px 0 4px; }
+.calendar-filter label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 8px; }
+.calendar-filter select { border: 1px solid #e5e2eb; border-radius: 5px; background: transparent; color: var(--ink); padding: 4px 6px; font-size: 9px; }
+:root[data-theme="dark"] .calendar-filter select { border-color: #5a4f72; background: #292536; color: #f1eff8; }
