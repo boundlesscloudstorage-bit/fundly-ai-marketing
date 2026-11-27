@@ -355,6 +355,25 @@ export default function Home() {
     : activity.status === "success" ? activity.data.items.filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase())) : [];
   const resourceErrors = [overview, campaigns, content, calendar, activity].filter((resource): resource is { status: "error"; message: string } => resource.status === "error");
 
+  function exportWorkspace(format: "json" | "csv") {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      campaigns: campaigns.status === "success" ? campaigns.data.items : [],
+      calendar: calendar.status === "success" ? calendar.data.items : [],
+      content: content.status === "success" ? content.data.items : [],
+      activity: activity.status === "success" ? activity.data.items : [],
+    };
+    const rows = payload.activity.map((item) => ({ type: item.kind, title: item.title, detail: item.detail, occurred_at: item.occurred_at }));
+    const csv = ["type,title,detail,occurred_at", ...rows.map((row) => [row.type, row.title, row.detail, row.occurred_at].map((value) => `"${value.replaceAll('"', '""')}"`).join(","))].join("\n");
+    const blob = new Blob([format === "json" ? JSON.stringify(payload, null, 2) : csv], { type: format === "json" ? "application/json" : "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `fundly-workspace-${new Date().toISOString().slice(0, 10)}.${format}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="app-shell">
       <Sidebar campaignCount={campaignCount} brandName={brandName} />
@@ -365,7 +384,7 @@ export default function Home() {
 
           <div className="demo-banner"><span className="banner-icon">✦</span><span><strong>Your workspace, ready to explore.</strong> Everything you see here is sample data. AI and social integrations aren’t connected.</span><a href="#studio">Explore the studio <span>→</span></a></div>
 
-          <div className="workspace-search"><label htmlFor="workspace-search-input">Search workspace <kbd>Ctrl K</kbd></label><input ref={searchInputRef} id="workspace-search-input" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search campaigns, drafts, or calendar entries" /><span aria-hidden="true">⌕</span><button type="button" className="quick-nav-trigger" onClick={() => setShowQuickNav(true)}>Quick jump</button></div>
+          <div className="workspace-search"><label htmlFor="workspace-search-input">Search workspace <kbd>Ctrl K</kbd></label><input ref={searchInputRef} id="workspace-search-input" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search campaigns, drafts, or calendar entries" /><span aria-hidden="true">⌕</span><div className="workspace-actions"><button type="button" className="quick-nav-trigger" onClick={() => setShowQuickNav(true)}>Quick jump</button><button type="button" onClick={() => exportWorkspace("json")}>Export JSON</button><button type="button" onClick={() => exportWorkspace("csv")}>Export CSV</button></div></div>
 
           {showQuickNav && <div className="quick-nav" role="dialog" aria-modal="true" aria-label="Quick navigation"><div className="quick-nav-card"><div className="quick-nav-heading"><strong>Jump to</strong><button type="button" onClick={() => setShowQuickNav(false)} aria-label="Close quick navigation">×</button></div>{[{ label: "Campaigns", href: "#campaigns" }, { label: "Calendar", href: "#calendar" }, { label: "Activity", href: "#activity" }, { label: "Content studio", href: "#studio" }].map((item) => <a href={item.href} key={item.href} onClick={() => setShowQuickNav(false)}>{item.label}<span>→</span></a>)}</div></div>}
 
