@@ -208,6 +208,8 @@ export default function Home() {
   const [calendar, setCalendar] = useState<ApiResource<CalendarListResponse>>({ status: "loading" });
   const [activity, setActivity] = useState<ApiResource<ActivityListResponse>>({ status: "loading" });
   const [activityFilter, setActivityFilter] = useState<"all" | ActivityItem["kind"]>("all");
+  const [campaignStatusFilter, setCampaignStatusFilter] = useState("all");
+  const [campaignChannelFilter, setCampaignChannelFilter] = useState("all");
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((value) => value + 1);
@@ -274,6 +276,9 @@ export default function Home() {
 
   const brandName = overview.status === "success" ? overview.data.brand_name : "Fundly";
   const campaignCount = campaigns.status === "success" ? campaigns.data.total : null;
+  const visibleCampaigns = campaigns.status === "success"
+    ? campaigns.data.items.filter((campaign) => (campaignStatusFilter === "all" || campaign.status === campaignStatusFilter) && (campaignChannelFilter === "all" || campaign.channel.startsWith(campaignChannelFilter)))
+    : [];
   const scheduledContent = calendar.status === "success"
     ? calendar.data.items.filter((item) => item.status.toLowerCase() === "scheduled")
     : [];
@@ -302,11 +307,12 @@ export default function Home() {
           </section>
 
           <div className="content-grid">
-            <section className="panel campaign-panel" id="campaigns"><SectionHeading eyebrow="IN MOTION" title="Campaigns" action="All campaigns" href="#campaigns"/><div className="campaign-list">
+            <section className="panel campaign-panel" id="campaigns"><SectionHeading eyebrow="IN MOTION" title="Campaigns" action="All campaigns" href="#campaigns"/><div className="campaign-filters"><label>Status<select value={campaignStatusFilter} onChange={(event) => setCampaignStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="Planning">Planning</option><option value="In progress">In progress</option></select></label><label>Channel<select value={campaignChannelFilter} onChange={(event) => setCampaignChannelFilter(event.target.value)}><option value="all">All channels</option><option value="Instagram">Instagram</option><option value="LinkedIn">LinkedIn</option><option value="X">X</option><option value="Email">Email</option><option value="Facebook">Facebook</option></select></label></div><div className="campaign-list">
               {campaigns.status === "loading" && <div className="resource-state">Loading campaigns…</div>}
               {campaigns.status === "error" && <RetryMessage message={campaigns.message} onRetry={retry} />}
               {campaigns.status === "success" && campaigns.data.items.length === 0 && <div className="resource-state">No campaigns are available yet.</div>}
-              {campaigns.status === "success" && campaigns.data.items.map((campaign, index) => <CampaignRow campaign={campaign} index={index} onEdit={setEditingCampaign} key={campaign.id} />)}
+              {campaigns.status === "success" && campaigns.data.items.length > 0 && visibleCampaigns.length === 0 && <div className="resource-state">No campaigns match these filters.</div>}
+              {campaigns.status === "success" && visibleCampaigns.map((campaign, index) => <CampaignRow campaign={campaign} index={index} onEdit={setEditingCampaign} key={campaign.id} />)}
             </div><div className="panel-footnote"><span>ⓘ</span> Campaign details are demonstration data.</div></section>
 
             <section className="panel calendar-panel" id="calendar"><SectionHeading eyebrow="UP NEXT" title="On the calendar" action="View calendar" href="#calendar"/><div className="upcoming-list">

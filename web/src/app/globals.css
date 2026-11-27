@@ -128,3 +128,8 @@
 :root[data-theme="dark"] .activity-item { border-bottom-color: #38334a; }
 :root[data-theme="dark"] .activity-filters button { border-color: #5a4f72; color: #bca8ff; }
 :root[data-theme="dark"] .activity-filters button.active { background: #332950; }
+
+.campaign-filters { display: flex; gap: 8px; margin: 0 0 5px; }
+.campaign-filters label { display: grid; gap: 3px; color: var(--muted); font-size: 8px; }
+.campaign-filters select { border: 1px solid #e5e2eb; border-radius: 5px; background: transparent; color: var(--ink); padding: 4px 6px; font-size: 9px; }
+:root[data-theme="dark"] .campaign-filters select { border-color: #5a4f72; background: #292536; color: #f1eff8; }
